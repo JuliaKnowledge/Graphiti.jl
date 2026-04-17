@@ -14,6 +14,11 @@ using JSON3
     include("test_falkordb.jl")
     include("test_kuzu.jl")
 
+    # Live integration tests (skipped unless explicitly enabled).
+    # FALKORDB_LIVE=1 needs a reachable FalkorDB; KUZU_LIVE=1 needs libkuzu.
+    include("test_falkordb_live.jl")
+    include("test_kuzu_live.jl")
+
     # Extension tests — only run if the optional weak dep is installable
     # in the active env. (RDFLib and ACSets pin conflicting DataStructures
     # versions, so they cannot share a test target; CI runs each in its own
