@@ -11,6 +11,7 @@ Base.@kwdef struct SearchConfig
     include_edges::Bool = true
     include_episodes::Bool = false
     include_communities::Bool = false
+    cross_encoder::Union{Nothing, AbstractCrossEncoder} = nothing
 end
 
 Base.@kwdef mutable struct SearchResults

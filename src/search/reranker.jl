@@ -193,9 +193,38 @@ function search(
         final_community_scores = cscores
     end
 
+    # ── Episode cosine search ─────────────────────────────────────────────────
+    final_episodes = EpisodicNode[]
+    final_episode_scores = Float64[]
+    if config.include_episodes
+        eps, escores = cosine_search_episodes(
+            client.driver, query_embedding, config.limit;
+            group_id = group_id, min_score = config.sim_min_score)
+        final_episodes = eps
+        final_episode_scores = escores
+    end
+
+    # ── Optional cross-encoder rerank ─────────────────────────────────────────
+    if config.cross_encoder !== nothing
+        if !isempty(final_edges)
+            ce_scores = rerank(config.cross_encoder, query, [e.fact for e in final_edges])
+            order = sortperm(ce_scores; rev = true)
+            final_edges = final_edges[order]
+            final_edge_scores = ce_scores[order]
+        end
+        if !isempty(final_nodes)
+            ce_scores = rerank(config.cross_encoder, query,
+                [isempty(n.summary) ? n.name : "$(n.name): $(n.summary)" for n in final_nodes])
+            order = sortperm(ce_scores; rev = true)
+            final_nodes = final_nodes[order]
+            final_node_scores = ce_scores[order]
+        end
+    end
+
     return SearchResults(
         edges = final_edges, edge_scores = final_edge_scores,
         nodes = final_nodes, node_scores = final_node_scores,
+        episodes = final_episodes, episode_scores = final_episode_scores,
         communities = final_communities, community_scores = final_community_scores,
     )
 end
@@ -226,6 +255,13 @@ function build_context_string(results::SearchResults)::String
         push!(parts, "\nCommunities:")
         for c in results.communities
             push!(parts, "- $(c.name): $(c.summary)")
+        end
+    end
+
+    if !isempty(results.episodes)
+        push!(parts, "\nEpisodes:")
+        for ep in results.episodes
+            push!(parts, "- $(ep.name): $(ep.content)")
         end
     end
 
