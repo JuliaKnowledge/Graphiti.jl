@@ -22,6 +22,7 @@ Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 ACSets = "227ef7b5-1206-438b-ac65-934d6da304b8"
 CSQL = "e80ae130-8983-4be4-9c83-9f285766f415"
 RDFLib = "a0e68e5a-3a1c-4e72-9e58-7b3f0e842d1a"
+SemanticSpacetime = "5463dcf6-8304-4a9f-b648-b2c67b135757"
 
 [extensions]
 GraphitiAgentFrameworkExt = "AgentFramework"
@@ -29,6 +30,7 @@ GraphitiAzureIdentityExt = "AzureIdentity"
 GraphitiRDFLibExt = "RDFLib"
 GraphitiACSetsExt = "ACSets"
 GraphitiCSQLExt = "CSQL"
+GraphitiSemanticSpacetimeExt = "SemanticSpacetime"
 
 [compat]
 AgentFramework = "0.1"
