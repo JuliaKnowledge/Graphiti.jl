@@ -92,6 +92,45 @@
     if HAS_AF
         @testset "GraphitiContextProvider (AgentFramework available)" begin
             @test isdefined(AgentFramework, :BaseContextProvider)
+
+            # The extension should define GraphitiContextProvider once
+            # AgentFramework is loaded.
+            @test isdefined(Main, :GraphitiContextProvider) ||
+                  isdefined(Graphiti, :GraphitiContextProvider) ||
+                  !isempty(Base.loaded_modules) # loaded at minimum
+            # Locate it via the package extension module.
+            ExtMod = Base.get_extension(Graphiti, :GraphitiAgentFrameworkExt)
+            @test ExtMod !== nothing
+            @test isdefined(ExtMod, :GraphitiContextProvider)
+
+            # Build a provider and exercise before_run!.
+            d   = MemoryDriver()
+            em  = DeterministicEmbedder(4)
+            llm = EchoLLMClient()
+            client = GraphitiClient(d, llm, em)
+
+            # Seed a node that matches our canned query embedding.
+            node = EntityNode(name = "Julia", summary = "A fast dynamic language.", group_id = "")
+            node.name_embedding = [1.0, 0.0, 0.0, 0.0]
+            save_node!(d, node)
+            em.embeddings["julia language"] = [1.0, 0.0, 0.0, 0.0]
+
+            provider = ExtMod.GraphitiContextProvider(client; group_id = "")
+            @test provider isa AgentFramework.BaseContextProvider
+
+            session = AgentFramework.AgentSession(id = "test-session")
+            sess_ctx = AgentFramework.SessionContext(
+                input_messages = [AgentFramework.Message(AgentFramework.ROLE_USER, "julia language")],
+            )
+            state = Dict{String, Any}()
+
+            AgentFramework.before_run!(provider, nothing, session, sess_ctx, state)
+            @test state["last_query"] == "julia language"
+            # Injected context goes into ctx.context_messages (keyed by the
+            # provider as source) — mirrors the Neo4jContextProvider pattern.
+            all_ctx_msgs = reduce(vcat, values(sess_ctx.context_messages); init=AgentFramework.Message[])
+            injected = [m for m in all_ctx_msgs if occursin("Julia", AgentFramework.get_text(m))]
+            @test !isempty(injected)
         end
     else
         @info "AgentFramework not available — skipping AgentFramework integration tests"
