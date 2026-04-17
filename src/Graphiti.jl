@@ -38,6 +38,7 @@ include("driver/driver.jl")
 include("driver/memory.jl")
 include("driver/neo4j.jl")
 include("driver/falkordb.jl")
+include("driver/kuzu.jl")
 
 # ── LLM and embedding abstractions ───────────────────────────────────────────
 include("llm/llm.jl")
@@ -103,7 +104,8 @@ export Graphiti,
        # Edges
        EntityEdge, EpisodicEdge, CommunityEdge,
        # Drivers
-       AbstractGraphDriver, MemoryDriver, Neo4jDriver, FalkorDBDriver,
+       AbstractGraphDriver, MemoryDriver, Neo4jDriver, FalkorDBDriver, KuzuDriver,
+       init_schema!,
        execute_query, save_node!, save_edge!, get_node, get_edge,
        delete_node!, delete_edge!, clear!,
        get_entity_nodes, get_entity_edges,
