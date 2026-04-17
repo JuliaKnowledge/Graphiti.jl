@@ -37,3 +37,12 @@ get_episodic_nodes(d::AbstractGraphDriver, group_id::String)::Vector{EpisodicNod
 
 get_latest_episodic_node(d::AbstractGraphDriver, group_id::String)::Union{Nothing, EpisodicNode} =
     error("get_latest_episodic_node not implemented for $(typeof(d))")
+
+get_community_nodes(d::AbstractGraphDriver, group_id::String)::Vector{CommunityNode} =
+    error("get_community_nodes not implemented for $(typeof(d))")
+
+get_community_edges(d::AbstractGraphDriver, group_id::String)::Vector{CommunityEdge} =
+    error("get_community_edges not implemented for $(typeof(d))")
+
+get_saga_nodes(d::AbstractGraphDriver, group_id::String)::Vector{SagaNode} =
+    error("get_saga_nodes not implemented for $(typeof(d))")

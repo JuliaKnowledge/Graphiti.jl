@@ -182,9 +182,21 @@ function search(
         final_node_scores = final_node_scores[1:k]
     end
 
+    # ── Community cosine search ───────────────────────────────────────────────
+    final_communities = CommunityNode[]
+    final_community_scores = Float64[]
+    if config.include_communities
+        comms, cscores = cosine_search_communities(
+            client.driver, query_embedding, config.limit;
+            group_id = group_id, min_score = config.sim_min_score)
+        final_communities = comms
+        final_community_scores = cscores
+    end
+
     return SearchResults(
         edges = final_edges, edge_scores = final_edge_scores,
         nodes = final_nodes, node_scores = final_node_scores,
+        communities = final_communities, community_scores = final_community_scores,
     )
 end
 
