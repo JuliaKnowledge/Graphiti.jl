@@ -11,6 +11,7 @@ using JSON3
     include("test_saga.jl")
     include("test_agent_framework_integration.jl")
     include("test_phase6.jl")
+    include("test_falkordb.jl")
 
     # Extension tests — only run if the optional weak dep is installable
     # in the active env. (RDFLib and ACSets pin conflicting DataStructures

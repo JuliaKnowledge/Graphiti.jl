@@ -23,6 +23,7 @@ using LinearAlgebra
 using Logging
 using Random
 using SHA
+using Sockets
 using Statistics
 using UUIDs
 using Unicode
@@ -36,6 +37,7 @@ include("edges.jl")
 include("driver/driver.jl")
 include("driver/memory.jl")
 include("driver/neo4j.jl")
+include("driver/falkordb.jl")
 
 # ── LLM and embedding abstractions ───────────────────────────────────────────
 include("llm/llm.jl")
@@ -101,7 +103,7 @@ export Graphiti,
        # Edges
        EntityEdge, EpisodicEdge, CommunityEdge,
        # Drivers
-       AbstractGraphDriver, MemoryDriver, Neo4jDriver,
+       AbstractGraphDriver, MemoryDriver, Neo4jDriver, FalkorDBDriver,
        execute_query, save_node!, save_edge!, get_node, get_edge,
        delete_node!, delete_edge!, clear!,
        get_entity_nodes, get_entity_edges,
