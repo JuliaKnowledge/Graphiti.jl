@@ -145,7 +145,9 @@ export Graphiti,
        # RDF / SPARQL (provided by GraphitiRDFLibExt when RDFLib is loaded)
        to_rdf_graph, sparql_kg, kg_to_turtle,
        # ACSets (provided by GraphitiACSetsExt when ACSets is loaded)
-       to_acset, acset_query
+       to_acset, acset_query,
+       # CSQL / causal queries (provided by GraphitiCSQLExt when CSQL is loaded)
+       to_csql, causal_query
 
 # ── Extension stubs ──────────────────────────────────────────────────────────
 # Concrete methods are installed by `ext/GraphitiRDFLibExt.jl` when `RDFLib`
@@ -197,5 +199,54 @@ Run a named query against the materialised ACSet. Built-in queries:
 Requires `ACSets` to be loaded.
 """
 function acset_query end
+
+"""
+    to_csql(client::GraphitiClient; group_id="", backend=:sqlite, path="",
+            relation_map=identity, relation_filter=_->true,
+            default_score=0.5)
+
+Materialise Graphiti's entity edges as a [`CSQL`](https://github.com/JuliaKnowledge/CSQL.jl)
+causal atlas and return the populated `CSQL.CSQLDatabase`.
+
+Each `EntityEdge` becomes a CSQL triple:
+
+    (source_entity.name, uppercase(relation_map(edge.name)), target_entity.name)
+
+with per-edge score, confidence, and `doc_id` taken from the first episode the
+edge was extracted from (or the edge uuid as fallback). Edges for which
+`relation_filter(edge.name)` returns `false` are skipped — useful to drop
+non-causal relations like `LOCATED_IN`.
+
+Requires `CSQL` to be loaded — `using CSQL` activates `GraphitiCSQLExt`.
+"""
+function to_csql end
+
+"""
+    causal_query(client::GraphitiClient, q::Symbol, args...; group_id="",
+                 backend=:sqlite, kwargs...)
+
+Run a named causal query over the CSQL atlas derived from `client`.
+
+Supported queries (each forwards to the corresponding `CSQL` function):
+
+| `q`              | args            | kwargs                       |
+|------------------|-----------------|------------------------------|
+| `:causes`        | `concept`       | `limit`, `exact`             |
+| `:effects`       | `concept`       | `limit`, `exact`             |
+| `:paths`         | *(none)*        | `depth`, `min_score`, `limit`|
+| `:backbone`      | *(none)*        | `limit`                      |
+| `:hubs`          | *(none)*        | `limit`                      |
+| `:controversial` | *(none)*        | `threshold`, `limit`         |
+| `:loops`         | *(none)*        |                              |
+| `:do_cut`        | `concept`       | `limit`                      |
+| `:soft_do`       | `concept`       | `attenuation`, `limit`       |
+| `:statistics`    | *(none)*        |                              |
+
+All `to_csql` keyword args (`relation_map`, `relation_filter`, `default_score`)
+are also accepted and forwarded during database construction.
+
+Requires `CSQL` to be loaded.
+"""
+function causal_query end
 
 end # module Graphiti
