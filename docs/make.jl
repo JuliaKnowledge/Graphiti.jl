@@ -22,6 +22,7 @@ makedocs(
             "Causal SQL"        => "guide/causal.md",
             "Semantic Spacetime"=> "guide/sst.md",
             "FalkorDB"          => "guide/falkordb.md",
+            "Kùzu"              => "guide/kuzu.md",
         ],
         "API Reference" => "api.md",
     ],
