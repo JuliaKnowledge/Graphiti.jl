@@ -112,6 +112,10 @@ function get_saga_nodes(d::MemoryDriver, group_id::String)::Vector{SagaNode}
     return [n for n in values(d.saga_nodes) if n.group_id == group_id]
 end
 
+function get_episodes_for_saga(d::MemoryDriver, saga_uuid::String)::Vector{EpisodicNode}
+    return [n for n in values(d.episodic_nodes) if n.saga_uuid == saga_uuid]
+end
+
 function get_entity_nodes_with_embeddings(d::MemoryDriver, group_id::String)::Vector{EntityNode}
     return [n for n in get_entity_nodes(d, group_id) if n.name_embedding !== nothing]
 end

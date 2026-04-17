@@ -85,3 +85,41 @@ function invalidate_edges!(
         end
     end
 end
+
+function invalidate_edges!(
+    client::GraphitiClient,
+    new_edges::Vector{EntityEdge},
+    group_id::String,
+    reference_time::DateTime,
+)
+    for new_edge in new_edges
+        existing = get_entity_edges(client.driver, group_id)
+        same_source = filter(
+            e -> e.source_node_uuid == new_edge.source_node_uuid &&
+                 e.name == new_edge.name &&
+                 e.uuid != new_edge.uuid &&
+                 e.invalid_at === nothing,
+            existing,
+        )
+
+        for old_edge in same_source
+            messages = [
+                Dict("role" => "system", "content" => INVALIDATION_SYSTEM),
+                Dict("role" => "user", "content" => format_prompt(
+                    INVALIDATION_USER;
+                    existing_fact = old_edge.fact,
+                    new_fact = new_edge.fact,
+                )),
+            ]
+            try
+                resp = _complete_json!(client, messages)
+                if get(resp, "contradicts", false) == true
+                    old_edge.invalid_at = reference_time
+                    save_edge!(client.driver, old_edge)
+                end
+            catch e
+                @warn "Invalidation LLM call failed: $e"
+            end
+        end
+    end
+end

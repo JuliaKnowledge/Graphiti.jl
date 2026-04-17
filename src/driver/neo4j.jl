@@ -169,3 +169,68 @@ get_entity_nodes(::Neo4jDriver, ::String)::Vector{EntityNode}       = EntityNode
 get_entity_edges(::Neo4jDriver, ::String)::Vector{EntityEdge}       = EntityEdge[]
 get_episodic_nodes(::Neo4jDriver, ::String)::Vector{EpisodicNode}   = EpisodicNode[]
 get_latest_episodic_node(::Neo4jDriver, ::String)::Union{Nothing, EpisodicNode} = nothing
+
+function save_node!(d::Neo4jDriver, n::SagaNode)
+    query = """
+    MERGE (n:Saga {uuid: \$uuid})
+    SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
+    RETURN n.uuid
+    """
+    execute_query(d, query; params=Dict(
+        "uuid" => n.uuid, "name" => n.name,
+        "summary" => n.summary, "group_id" => n.group_id,
+    ))
+    return n
+end
+
+function get_community_nodes(d::Neo4jDriver, group_id::String)::Vector{CommunityNode}
+    query = isempty(group_id) ?
+        "MATCH (n:Community) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id" :
+        "MATCH (n:Community {group_id: \$group_id}) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id"
+    rows = isempty(group_id) ? execute_query(d, query) :
+        execute_query(d, query; params=Dict("group_id" => group_id))
+    return [CommunityNode(
+        uuid = string(get(r, "uuid", "")),
+        name = string(get(r, "name", "")),
+        summary = string(get(r, "summary", "")),
+        group_id = string(get(r, "group_id", "")),
+    ) for r in rows]
+end
+
+function get_community_edges(d::Neo4jDriver, community_uuid::String)::Vector{CommunityEdge}
+    query = "MATCH (c:Community {uuid: \$uuid})-[r:HAS_MEMBER]->(n) " *
+            "RETURN r.uuid AS uuid, c.uuid AS src, n.uuid AS tgt, r.group_id AS group_id"
+    rows = execute_query(d, query; params=Dict("uuid" => community_uuid))
+    return [CommunityEdge(
+        uuid = string(get(r, "uuid", "")),
+        source_node_uuid = string(get(r, "src", "")),
+        target_node_uuid = string(get(r, "tgt", "")),
+        group_id = string(get(r, "group_id", "")),
+    ) for r in rows]
+end
+
+function get_saga_nodes(d::Neo4jDriver, group_id::String)::Vector{SagaNode}
+    query = isempty(group_id) ?
+        "MATCH (n:Saga) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id" :
+        "MATCH (n:Saga {group_id: \$group_id}) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id"
+    rows = isempty(group_id) ? execute_query(d, query) :
+        execute_query(d, query; params=Dict("group_id" => group_id))
+    return [SagaNode(
+        uuid = string(get(r, "uuid", "")),
+        name = string(get(r, "name", "")),
+        summary = string(get(r, "summary", "")),
+        group_id = string(get(r, "group_id", "")),
+    ) for r in rows]
+end
+
+function get_episodes_for_saga(d::Neo4jDriver, saga_uuid::String)::Vector{EpisodicNode}
+    query = "MATCH (n:Episodic {saga_uuid: \$saga_uuid}) " *
+            "RETURN n.uuid AS uuid, n.name AS name, n.content AS content, n.group_id AS group_id"
+    rows = execute_query(d, query; params=Dict("saga_uuid" => saga_uuid))
+    return [EpisodicNode(
+        uuid = string(get(r, "uuid", "")),
+        name = string(get(r, "name", "")),
+        content = string(get(r, "content", "")),
+        group_id = string(get(r, "group_id", "")),
+    ) for r in rows]
+end

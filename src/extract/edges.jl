@@ -22,6 +22,35 @@ function extract_edges_from_episode(
         return EntityEdge[]
     end
 
+    return _parse_edge_response(response, episode, entities)
+end
+
+function extract_edges_from_episode(
+    client::GraphitiClient,
+    episode::EpisodicNode,
+    entities::Vector{EntityNode},
+)::Vector{EntityEdge}
+    isempty(entities) && return EntityEdge[]
+
+    entity_names = join([e.name for e in entities], ", ")
+    messages = [
+        Dict("role" => "system", "content" => EXTRACT_EDGES_SYSTEM),
+        Dict("role" => "user", "content" => format_prompt(EXTRACT_EDGES_USER;
+            entity_names = entity_names,
+            episode_content = episode.content)),
+    ]
+
+    response = try
+        _complete_json!(client, messages)
+    catch e
+        @warn "Edge extraction LLM call failed: $e"
+        return EntityEdge[]
+    end
+
+    return _parse_edge_response(response, episode, entities)
+end
+
+function _parse_edge_response(response, episode::EpisodicNode, entities::Vector{EntityNode})::Vector{EntityEdge}
     name_to_uuid = Dict(lowercase(e.name) => e.uuid for e in entities)
 
     edges = EntityEdge[]
