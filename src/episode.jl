@@ -79,3 +79,40 @@ end
 
 _ep_field(ep::NamedTuple, key::Symbol, default) = hasproperty(ep, key) ? getproperty(ep, key) : default
 _ep_field(ep::AbstractDict, key::Symbol, default) = get(ep, key, get(ep, string(key), default))
+
+"""
+    ingest_conversation!(client, messages; group_id) -> Vector{AddEpisodeResults}
+
+Turn a chat transcript into a sequence of `EpisodicNode`s — one per message —
+and run the full `add_episode` pipeline for each.
+
+Each element of `messages` should be a `Dict` with at least `"role"` and
+`"content"` keys (string or symbol keys both accepted).  Empty content strings
+are skipped.
+
+This is the recommended entry point for persisting agent conversation history
+into the knowledge graph.
+"""
+function ingest_conversation!(
+    client::GraphitiClient,
+    messages::Vector{<:Dict};
+    group_id::String = "",
+)::Vector{AddEpisodeResults}
+    results = AddEpisodeResults[]
+    for (i, msg) in enumerate(messages)
+        role    = string(get(msg, "role",    get(msg, :role,    "user")))
+        content = string(get(msg, "content", get(msg, :content, "")))
+        isempty(strip(content)) && continue
+        r = add_episode(
+            client,
+            "message_$(i)",
+            content;
+            source = MESSAGE,
+            source_description = role,
+            group_id = group_id,
+            valid_at = now(UTC),
+        )
+        push!(results, r)
+    end
+    return results
+end
