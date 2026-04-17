@@ -6,7 +6,7 @@ function _default_openai_http(url::String, headers::Vector, body::String)::Tuple
 end
 
 mutable struct OpenAILLMClient <: AbstractLLMClient
-    api_key::String
+    api_key::Any
     base_url::String
     model::String
     temperature::Float64
@@ -16,7 +16,7 @@ mutable struct OpenAILLMClient <: AbstractLLMClient
 end
 
 function OpenAILLMClient(;
-    api_key::String = get(ENV, "OPENAI_API_KEY", ""),
+    api_key = get(ENV, "OPENAI_API_KEY", ""),
     base_url::String = "https://api.openai.com/v1",
     model::String = "gpt-4o-mini",
     temperature::Float64 = 0.0,
@@ -27,7 +27,7 @@ function OpenAILLMClient(;
 end
 
 mutable struct AzureOpenAILLMClient <: AbstractLLMClient
-    api_key::String
+    api_key::Any
     endpoint::String
     deployment::String
     api_version::String
@@ -38,7 +38,7 @@ mutable struct AzureOpenAILLMClient <: AbstractLLMClient
 end
 
 function AzureOpenAILLMClient(;
-    api_key::String = get(ENV, "AZURE_OPENAI_API_KEY", ""),
+    api_key = get(ENV, "AZURE_OPENAI_API_KEY", ""),
     endpoint::String = get(ENV, "AZURE_OPENAI_ENDPOINT", ""),
     deployment::String = get(ENV, "AZURE_OPENAI_DEPLOYMENT", ""),
     api_version::String = get(ENV, "AZURE_OPENAI_API_VERSION", "2024-06-01"),
@@ -51,10 +51,19 @@ function AzureOpenAILLMClient(;
 end
 
 _chat_headers(c::OpenAILLMClient) =
-    ["Content-Type" => "application/json", "Authorization" => "Bearer $(c.api_key)"]
+    ["Content-Type" => "application/json",
+     "Authorization" => "Bearer $(_resolve_bearer(c.api_key))"]
 
-_chat_headers(c::AzureOpenAILLMClient) =
-    ["Content-Type" => "application/json", "api-key" => c.api_key]
+function _chat_headers(c::AzureOpenAILLMClient)
+    if _is_raw_api_key(c.api_key)
+        return ["Content-Type" => "application/json",
+                "api-key" => _resolve_bearer(c.api_key)]
+    else
+        # Credential / callable → Azure AD bearer token.
+        return ["Content-Type" => "application/json",
+                "Authorization" => "Bearer $(_resolve_bearer(c.api_key))"]
+    end
+end
 
 _chat_url(c::OpenAILLMClient) = rstrip(c.base_url, '/') * "/chat/completions"
 

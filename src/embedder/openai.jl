@@ -1,14 +1,14 @@
 """OpenAI and Azure OpenAI embedding clients."""
 
 mutable struct OpenAIEmbedder <: AbstractEmbedder
-    api_key::String
+    api_key::Any
     base_url::String
     model::String
     _request_fn::Function
 end
 
 function OpenAIEmbedder(;
-    api_key::String = get(ENV, "OPENAI_API_KEY", ""),
+    api_key = get(ENV, "OPENAI_API_KEY", ""),
     base_url::String = "https://api.openai.com/v1",
     model::String = "text-embedding-3-small",
     _request_fn::Function = _default_openai_http,
@@ -17,7 +17,7 @@ function OpenAIEmbedder(;
 end
 
 mutable struct AzureOpenAIEmbedder <: AbstractEmbedder
-    api_key::String
+    api_key::Any
     endpoint::String
     deployment::String
     api_version::String
@@ -25,7 +25,7 @@ mutable struct AzureOpenAIEmbedder <: AbstractEmbedder
 end
 
 function AzureOpenAIEmbedder(;
-    api_key::String = get(ENV, "AZURE_OPENAI_API_KEY", ""),
+    api_key = get(ENV, "AZURE_OPENAI_API_KEY", ""),
     endpoint::String = get(ENV, "AZURE_OPENAI_ENDPOINT", ""),
     deployment::String = get(ENV, "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", ""),
     api_version::String = get(ENV, "AZURE_OPENAI_API_VERSION", "2024-06-01"),
@@ -35,10 +35,18 @@ function AzureOpenAIEmbedder(;
 end
 
 _embed_headers(e::OpenAIEmbedder) =
-    ["Content-Type" => "application/json", "Authorization" => "Bearer $(e.api_key)"]
+    ["Content-Type" => "application/json",
+     "Authorization" => "Bearer $(_resolve_bearer(e.api_key))"]
 
-_embed_headers(e::AzureOpenAIEmbedder) =
-    ["Content-Type" => "application/json", "api-key" => e.api_key]
+function _embed_headers(e::AzureOpenAIEmbedder)
+    if _is_raw_api_key(e.api_key)
+        return ["Content-Type" => "application/json",
+                "api-key" => _resolve_bearer(e.api_key)]
+    else
+        return ["Content-Type" => "application/json",
+                "Authorization" => "Bearer $(_resolve_bearer(e.api_key))"]
+    end
+end
 
 _embed_url(e::OpenAIEmbedder) = rstrip(e.base_url, '/') * "/embeddings"
 

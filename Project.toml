@@ -5,6 +5,7 @@ authors = ["JuliaKnowledge contributors"]
 
 [deps]
 AgentFramework = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
+AzureIdentity = "1b7b9afa-6387-4f08-b495-223719ee650f"
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
@@ -19,14 +20,18 @@ Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [extensions]
 GraphitiAgentFrameworkExt = "AgentFramework"
+GraphitiAzureIdentityExt = "AzureIdentity"
 
 [compat]
+AgentFramework = "0.1"
+AzureIdentity = "0.1"
 HTTP = "1"
 JSON3 = "1"
 julia = "1.10"
 
 [extras]
+AgentFramework = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Test", "AgentFramework"]

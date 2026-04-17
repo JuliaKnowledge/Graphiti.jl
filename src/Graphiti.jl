@@ -41,6 +41,9 @@ include("driver/neo4j.jl")
 include("llm/llm.jl")
 include("embedder/embedder.jl")
 
+# ── Auth helpers (shared by OpenAI / Azure OpenAI clients) ───────────────────
+include("auth.jl")
+
 # ── Prompt templates ─────────────────────────────────────────────────────────
 include("prompts/prompts.jl")
 
