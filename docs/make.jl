@@ -19,6 +19,7 @@ makedocs(
             "Agent Memory"    => "guide/agent_memory.md",
             "SPARQL & RDF"    => "guide/sparql.md",
             "ACSets"          => "guide/acsets.md",
+            "Causal SQL"      => "guide/causal.md",
         ],
         "API Reference" => "api.md",
     ],
