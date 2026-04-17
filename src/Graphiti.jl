@@ -141,6 +141,37 @@ export Graphiti,
        cosine_similarity,
        TokenUsage, reset!,
        # MCP
-       mcp_serve
+       mcp_serve,
+       # RDF / SPARQL (provided by GraphitiRDFLibExt when RDFLib is loaded)
+       to_rdf_graph, sparql_kg, kg_to_turtle
+
+# ── Extension stubs ──────────────────────────────────────────────────────────
+# Concrete methods are installed by `ext/GraphitiRDFLibExt.jl` when `RDFLib`
+# is loaded alongside Graphiti.
+
+"""
+    to_rdf_graph(client::GraphitiClient; group_id="")
+
+Materialise the knowledge graph held by `client` as an `RDFLib.RDFGraph`.
+Requires `RDFLib` to be loaded — `using RDFLib` activates
+`GraphitiRDFLibExt`, which provides the concrete method.
+"""
+function to_rdf_graph end
+
+"""
+    sparql_kg(client::GraphitiClient, query::AbstractString; group_id="")
+
+Materialise the knowledge graph and run a SPARQL query against it.
+Requires `RDFLib`.
+"""
+function sparql_kg end
+
+"""
+    kg_to_turtle(client::GraphitiClient; group_id="") -> String
+
+Materialise the knowledge graph and serialise it as Turtle. Requires
+`RDFLib`.
+"""
+function kg_to_turtle end
 
 end # module Graphiti
