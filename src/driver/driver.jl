@@ -46,3 +46,6 @@ get_community_edges(d::AbstractGraphDriver, group_id::String)::Vector{CommunityE
 
 get_saga_nodes(d::AbstractGraphDriver, group_id::String)::Vector{SagaNode} =
     error("get_saga_nodes not implemented for $(typeof(d))")
+
+get_episodes_for_saga(d::AbstractGraphDriver, saga_uuid::String)::Vector{EpisodicNode} =
+    error("get_episodes_for_saga not implemented for $(typeof(d))")

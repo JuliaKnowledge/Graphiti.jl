@@ -22,9 +22,10 @@ function add_episode(
         source_description = source_description, group_id = group_id,
         valid_at = valid_at,
     )
+    episode.content_embedding = embed(client.embedder, content)
     save_node!(client.driver, episode)
 
-    entities = extract_entities(client.llm, episode)
+    entities = extract_entities(client, episode)
 
     for node in entities
         node.name_embedding = embed(client.embedder, node.name)
@@ -32,7 +33,7 @@ function add_episode(
 
     canonical_nodes = dedupe_entities!(client.driver, client.embedder, client.llm, entities, group_id)
 
-    raw_edges = extract_edges_from_episode(client.llm, episode, canonical_nodes)
+    raw_edges = extract_edges_from_episode(client, episode, canonical_nodes)
 
     for edge in raw_edges
         edge.fact_embedding = embed(client.embedder, edge.fact)
@@ -40,7 +41,7 @@ function add_episode(
 
     canonical_edges = dedupe_edges!(client.driver, client.embedder, raw_edges, group_id)
 
-    invalidate_edges!(client.driver, client.llm, canonical_edges, group_id, reference_time)
+    invalidate_edges!(client, canonical_edges, group_id, reference_time)
 
     episodic_edges = EpisodicEdge[]
     for node in canonical_nodes

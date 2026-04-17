@@ -15,6 +15,7 @@ Base.@kwdef mutable struct EpisodicNode
     uuid::String = string(uuid4())
     name::String = ""
     content::String = ""
+    content_embedding::Union{Nothing, Vector{Float64}} = nothing
     source::EpisodeType = TEXT
     source_description::String = ""
     valid_at::DateTime = now(UTC)
