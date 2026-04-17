@@ -50,6 +50,10 @@ include("search/search.jl")
 # ── Utilities (GraphitiClient, TokenUsage, cosine_similarity) ────────────────
 include("utils.jl")
 
+# ── OpenAI / Azure OpenAI concrete LLM and embedder implementations ──────────
+include("llm/openai.jl")
+include("embedder/openai.jl")
+
 # ── Extraction pipeline ──────────────────────────────────────────────────────
 include("extract/nodes.jl")
 include("extract/edges.jl")
@@ -63,6 +67,7 @@ include("dedupe/edges.jl")
 include("search/cosine.jl")
 include("search/fulltext.jl")
 include("search/bfs.jl")
+include("search/crossencoder.jl")
 include("search/reranker.jl")
 
 # ── Community detection + summarization ──────────────────────────────────────
@@ -78,6 +83,9 @@ include("context_builder.jl")
 # ── High-level operations ────────────────────────────────────────────────────
 include("episode.jl")
 include("triplet.jl")
+
+# ── MCP (Model Context Protocol) server ──────────────────────────────────────
+include("mcp.jl")
 
 # ── Public API exports ───────────────────────────────────────────────────────
 export Graphiti,
@@ -97,10 +105,13 @@ export Graphiti,
        get_episodic_nodes, get_latest_episodic_node,
        get_community_nodes, get_community_edges,
        get_saga_nodes,
+       get_episodes_for_saga,
        # LLM / embedder
        AbstractLLMClient, AbstractEmbedder,
        EchoLLMClient, enqueue_response!, complete, complete_json,
+       OpenAILLMClient, AzureOpenAILLMClient,
        RandomEmbedder, DeterministicEmbedder, embed,
+       OpenAIEmbedder, AzureOpenAIEmbedder,
        # Prompts
        format_prompt,
        # Extraction / dedup
@@ -109,8 +120,10 @@ export Graphiti,
        # Search
        SearchConfig, SearchResults, search, build_context_string,
        cosine_search_edges, cosine_search_nodes, cosine_search_communities,
+       cosine_search_episodes,
        bm25_search_edges, bm25_search_nodes,
        bfs_search, rrf_rerank, mmr_rerank,
+       AbstractCrossEncoder, DummyCrossEncoder, LLMCrossEncoder, rerank,
        # Community
        build_communities!, update_community!, summarize_community!,
        # Saga
@@ -123,6 +136,8 @@ export Graphiti,
        build_indices_and_constraints, clear_data,
        # Utility
        cosine_similarity,
-       TokenUsage, reset!
+       TokenUsage, reset!,
+       # MCP
+       mcp_serve
 
 end # module Graphiti
