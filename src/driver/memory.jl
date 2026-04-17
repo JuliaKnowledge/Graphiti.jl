@@ -91,6 +91,27 @@ function get_latest_episodic_node(d::MemoryDriver, group_id::String)::Union{Noth
     return reduce((a, b) -> a.valid_at >= b.valid_at ? a : b, nodes)
 end
 
+function get_community_nodes(d::MemoryDriver, group_id::String)::Vector{CommunityNode}
+    if isempty(group_id)
+        return collect(values(d.community_nodes))
+    end
+    return [n for n in values(d.community_nodes) if n.group_id == group_id]
+end
+
+function get_community_edges(d::MemoryDriver, group_id::String)::Vector{CommunityEdge}
+    if isempty(group_id)
+        return collect(values(d.community_edges))
+    end
+    return [e for e in values(d.community_edges) if e.group_id == group_id]
+end
+
+function get_saga_nodes(d::MemoryDriver, group_id::String)::Vector{SagaNode}
+    if isempty(group_id)
+        return collect(values(d.saga_nodes))
+    end
+    return [n for n in values(d.saga_nodes) if n.group_id == group_id]
+end
+
 function get_entity_nodes_with_embeddings(d::MemoryDriver, group_id::String)::Vector{EntityNode}
     return [n for n in get_entity_nodes(d, group_id) if n.name_embedding !== nothing]
 end

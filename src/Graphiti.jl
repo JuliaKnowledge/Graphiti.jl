@@ -47,7 +47,7 @@ include("prompts/prompts.jl")
 # ── Search config/result types (needed by GraphitiClient) ────────────────────
 include("search/search.jl")
 
-# ── Utilities (GraphitiClient, cosine_similarity) ────────────────────────────
+# ── Utilities (GraphitiClient, TokenUsage, cosine_similarity) ────────────────
 include("utils.jl")
 
 # ── Extraction pipeline ──────────────────────────────────────────────────────
@@ -64,6 +64,16 @@ include("search/cosine.jl")
 include("search/fulltext.jl")
 include("search/bfs.jl")
 include("search/reranker.jl")
+
+# ── Community detection + summarization ──────────────────────────────────────
+include("community/summary.jl")
+include("community/detection.jl")
+
+# ── Saga (episode-group) management ──────────────────────────────────────────
+include("saga.jl")
+
+# ── Standalone context builder ────────────────────────────────────────────────
+include("context_builder.jl")
 
 # ── High-level operations ────────────────────────────────────────────────────
 include("episode.jl")
@@ -85,6 +95,8 @@ export Graphiti,
        delete_node!, delete_edge!, clear!,
        get_entity_nodes, get_entity_edges,
        get_episodic_nodes, get_latest_episodic_node,
+       get_community_nodes, get_community_edges,
+       get_saga_nodes,
        # LLM / embedder
        AbstractLLMClient, AbstractEmbedder,
        EchoLLMClient, enqueue_response!, complete, complete_json,
@@ -96,14 +108,21 @@ export Graphiti,
        dedupe_entities!, dedupe_edges!, invalidate_edges!,
        # Search
        SearchConfig, SearchResults, search, build_context_string,
-       cosine_search_edges, cosine_search_nodes,
+       cosine_search_edges, cosine_search_nodes, cosine_search_communities,
        bm25_search_edges, bm25_search_nodes,
        bfs_search, rrf_rerank, mmr_rerank,
+       # Community
+       build_communities!, update_community!, summarize_community!,
+       # Saga
+       add_saga!, assign_episode_to_saga!, summarize_saga!,
+       # Context builder
+       ContextBuilder, build,
        # High-level
        GraphitiClient, AddEpisodeResults,
-       add_episode, add_episode_bulk, add_triplet,
+       add_episode, add_episode_bulk, add_triplet, ingest_conversation!,
        build_indices_and_constraints, clear_data,
        # Utility
-       cosine_similarity
+       cosine_similarity,
+       TokenUsage, reset!
 
 end # module Graphiti

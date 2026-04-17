@@ -50,3 +50,32 @@ const INVALIDATION_USER = """Does the new fact contradict the existing fact?
 Existing fact: {existing_fact}
 New fact: {new_fact}
 Return JSON."""
+
+const SUMMARIZE_COMMUNITY_SYSTEM = """You are a knowledge graph analyst.
+Given a list of related entities, produce a short canonical name and a one-sentence
+summary that captures what these entities have in common.
+
+Return JSON: {"name": "Short Group Name", "summary": "One sentence describing the group."}
+"""
+
+const SUMMARIZE_COMMUNITY_USER = """Summarize the following group of related entities:
+
+{entity_names}
+
+Entity descriptions:
+{entity_summaries}
+
+Return JSON with "name" (a short 2–4 word label) and "summary" (one sentence)."""
+
+const SUMMARIZE_SAGA_SYSTEM = """You are a narrative summarizer.
+Given a sequence of episode contents from a knowledge graph, write a concise 2-3
+sentence summary capturing the key events, facts, and their timeline.
+
+Return JSON: {"summary": "2-3 sentence narrative summary."}
+"""
+
+const SUMMARIZE_SAGA_USER = """Summarize the following episode sequence:
+
+{episode_contents}
+
+Return JSON with a "summary" field."""

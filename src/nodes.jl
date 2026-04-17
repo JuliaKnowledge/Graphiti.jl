@@ -20,6 +20,7 @@ Base.@kwdef mutable struct EpisodicNode
     valid_at::DateTime = now(UTC)
     group_id::String = ""
     entity_edges::Vector{String} = String[]
+    saga_uuid::Union{Nothing, String} = nothing
     created_at::DateTime = now(UTC)
 end
 
