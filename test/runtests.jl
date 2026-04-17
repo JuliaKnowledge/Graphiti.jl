@@ -10,4 +10,5 @@ using JSON3
     include("test_community.jl")
     include("test_saga.jl")
     include("test_agent_framework_integration.jl")
+    include("test_phase6.jl")
 end
