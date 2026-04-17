@@ -143,7 +143,9 @@ export Graphiti,
        # MCP
        mcp_serve,
        # RDF / SPARQL (provided by GraphitiRDFLibExt when RDFLib is loaded)
-       to_rdf_graph, sparql_kg, kg_to_turtle
+       to_rdf_graph, sparql_kg, kg_to_turtle,
+       # ACSets (provided by GraphitiACSetsExt when ACSets is loaded)
+       to_acset, acset_query
 
 # ── Extension stubs ──────────────────────────────────────────────────────────
 # Concrete methods are installed by `ext/GraphitiRDFLibExt.jl` when `RDFLib`
@@ -173,5 +175,27 @@ Materialise the knowledge graph and serialise it as Turtle. Requires
 `RDFLib`.
 """
 function kg_to_turtle end
+
+"""
+    to_acset(client::GraphitiClient; group_id="")
+
+Materialise the knowledge graph as a typed `ACSet` (schema-validated
+combinatorial structure) using `ACSets.jl`. Requires `ACSets` to be
+loaded — `using ACSets` activates `GraphitiACSetsExt`.
+"""
+function to_acset end
+
+"""
+    acset_query(client::GraphitiClient, q::Symbol; group_id="", kwargs...)
+
+Run a named query against the materialised ACSet. Built-in queries:
+
+- `:facts_between(source, target)` — facts whose source/target labels match.
+- `:entities_in_community(community)` — entities that belong to a community label.
+- `:facts_valid_at(t)` — facts whose `[valid_at, invalid_at)` interval contains `t`.
+
+Requires `ACSets` to be loaded.
+"""
+function acset_query end
 
 end # module Graphiti

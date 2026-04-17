@@ -12,30 +12,32 @@ HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
-RDFLib = "a0e68e5a-3a1c-4e72-9e58-7b3f0e842d1a"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
+[weakdeps]
+ACSets = "227ef7b5-1206-438b-ac65-934d6da304b8"
+RDFLib = "a0e68e5a-3a1c-4e72-9e58-7b3f0e842d1a"
+
 [extensions]
 GraphitiAgentFrameworkExt = "AgentFramework"
 GraphitiAzureIdentityExt = "AzureIdentity"
 GraphitiRDFLibExt = "RDFLib"
+GraphitiACSetsExt = "ACSets"
 
 [compat]
 AgentFramework = "0.1"
 AzureIdentity = "0.1"
 HTTP = "1"
 JSON3 = "1"
-RDFLib = "0.1.0"
 julia = "1.10"
 
 [extras]
 AgentFramework = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
-RDFLib = "a0e68e5a-3a1c-4e72-9e58-7b3f0e842d1a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "AgentFramework", "RDFLib"]
+test = ["Test", "AgentFramework"]

@@ -18,6 +18,7 @@ makedocs(
             "Communities"     => "guide/communities.md",
             "Agent Memory"    => "guide/agent_memory.md",
             "SPARQL & RDF"    => "guide/sparql.md",
+            "ACSets"          => "guide/acsets.md",
         ],
         "API Reference" => "api.md",
     ],
