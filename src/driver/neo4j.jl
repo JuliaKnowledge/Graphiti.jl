@@ -105,8 +105,12 @@ function save_node!(d::Neo4jDriver, n::EpisodicNode)
 end
 
 function save_node!(d::Neo4jDriver, n::CommunityNode)
-    execute_query(d, "MERGE (n:Community {uuid: \$uuid}) SET n.name = \$name RETURN n.uuid";
-        params=Dict("uuid" => n.uuid, "name" => n.name))
+    execute_query(d,
+        "MERGE (n:Community {uuid: \$uuid}) " *
+        "SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id " *
+        "RETURN n.uuid";
+        params=Dict("uuid" => n.uuid, "name" => n.name,
+                    "summary" => n.summary, "group_id" => n.group_id))
     return n
 end
 
