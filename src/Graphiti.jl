@@ -147,7 +147,9 @@ export Graphiti,
        # ACSets (provided by GraphitiACSetsExt when ACSets is loaded)
        to_acset, acset_query,
        # CSQL / causal queries (provided by GraphitiCSQLExt when CSQL is loaded)
-       to_csql, causal_query
+       to_csql, causal_query,
+       # Semantic Spacetime (provided by GraphitiSemanticSpacetimeExt when SemanticSpacetime is loaded)
+       to_sst, sst_query
 
 # ── Extension stubs ──────────────────────────────────────────────────────────
 # Concrete methods are installed by `ext/GraphitiRDFLibExt.jl` when `RDFLib`
@@ -248,5 +250,41 @@ are also accepted and forwarded during database construction.
 Requires `CSQL` to be loaded.
 """
 function causal_query end
+
+"""
+    to_sst(client::GraphitiClient; group_id="", store=nothing,
+           st_classifier=nothing, include_episodic=true, include_community=true)
+
+Materialise the Graphiti knowledge graph as a
+[`SemanticSpacetime`](https://github.com/JuliaKnowledge/SemanticSpacetime.jl)
+`MemoryStore`, classifying every relation into one of the four SST
+type classes (NEAR, LEADSTO, CONTAINS, EXPRESS).
+
+The default `st_classifier(name) -> Symbol` maps common relation names
+into SST classes; pass your own to override. `EpisodicEdge`s are
+emitted as `episode CONTAINS entity` and `CommunityEdge`s as
+`community CONTAINS entity`.
+
+Requires `SemanticSpacetime` to be loaded.
+"""
+function to_sst end
+
+"""
+    sst_query(client::GraphitiClient, q::Symbol, args...; group_id="", kwargs...)
+
+Run a named Semantic Spacetime query. Supported queries:
+
+| `q`                  | args                | kwargs                  |
+|----------------------|---------------------|-------------------------|
+| `:forward_cone`      | `name`              | `depth`, `limit`        |
+| `:backward_cone`     | `name`              | `depth`, `limit`        |
+| `:paths`             | `from_name, to_name`| `max_depth`             |
+| `:dijkstra`          | `from_name, to_name`|                         |
+| `:summary`           | *(none)*            |                         |
+
+All `to_sst` build keyword args are forwarded during store construction.
+Requires `SemanticSpacetime`.
+"""
+function sst_query end
 
 end # module Graphiti

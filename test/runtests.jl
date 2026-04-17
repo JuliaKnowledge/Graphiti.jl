@@ -26,4 +26,5 @@ using JSON3
     _try_include("test_rdflib_ext.jl", "RDFLib")
     _try_include("test_acsets_ext.jl", "ACSets")
     _try_include("test_csql_ext.jl", "CSQL")
+    _try_include("test_sst_ext.jl", "SemanticSpacetime")
 end
