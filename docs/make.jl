@@ -30,7 +30,7 @@ makedocs(
 )
 
 deploydocs(
-    repo   = "github.com/your-org/Graphiti.jl.git",
+    repo   = "github.com/JuliaKnowledge/Graphiti.jl.git",
     branch = "gh-pages",
-    devbranch = "master",
+    devbranch = "main",
 )
