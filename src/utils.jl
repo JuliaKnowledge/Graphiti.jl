@@ -25,6 +25,20 @@ function reset!(u::TokenUsage)
     return u
 end
 
+"""
+    GraphitiClient(driver, llm, embedder; group_id="", crossencoder=nothing)
+
+The top-level façade for ingesting episodes and searching the knowledge
+graph. Wraps a [`AbstractGraphDriver`](@ref) (storage), an
+[`AbstractLLMClient`](@ref) (extraction & summarisation), and an
+[`AbstractEmbedder`](@ref) (vector search). All `add_episode`,
+`search`, `build_communities!`, etc. functions take a
+`GraphitiClient` as their first argument.
+
+`group_id` scopes operations to a tenant/namespace. Pass an
+[`AbstractCrossEncoder`](@ref) as `crossencoder` to enable
+[`rerank`](@ref)-based reranking.
+"""
 mutable struct GraphitiClient
     driver::AbstractGraphDriver
     llm::AbstractLLMClient

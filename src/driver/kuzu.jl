@@ -69,6 +69,24 @@ end
 
 # ── driver struct ────────────────────────────────────────────────────────────
 
+"""
+    KuzuDriver(; db_path, _query_fn, auto_init_schema=false)
+
+Driver for [Kùzu](https://kuzudb.com), an embedded property-graph
+database with a Cypher-like query language. There is no native Julia
+client for Kùzu; this driver delegates query execution to a
+`_query_fn(driver, query::String, params::Dict) -> Vector{Dict}` that
+the user supplies (typically a `ccall` wrapper over `libkuzu`).
+
+`db_path` defaults to the `KUZU_DB_PATH` env var. Pass
+`auto_init_schema=true` (or call [`init_schema!`](@ref) once) on a
+fresh database to create the Entity / Episodic / Community / Saga
+node tables and the RELATES_TO / MENTIONS / HAS_MEMBER rel tables.
+
+The default `_query_fn` raises `Graphiti.GraphitiKuzuError` to
+encourage users to wire in a real backend; the Kùzu guide page
+includes an FFI sketch.
+"""
 mutable struct KuzuDriver <: AbstractGraphDriver
     db_path::String
     _query_fn::Function

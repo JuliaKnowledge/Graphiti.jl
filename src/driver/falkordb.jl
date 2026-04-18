@@ -90,6 +90,20 @@ end
 
 # ── Driver ───────────────────────────────────────────────────────────────────
 
+"""
+    FalkorDBDriver(; host, port, password, graph, _command_fn)
+
+Cypher-over-Redis driver for [FalkorDB](https://www.falkordb.com).
+Speaks raw RESP2 over TCP using `Sockets` stdlib (no external Julia
+client dependency). Defaults read `FALKORDB_HOST`, `FALKORDB_PORT`,
+`FALKORDB_PASSWORD`, `FALKORDB_GRAPH` env vars. Override `_command_fn`
+with `(driver, args::Vector{String}) -> reply` to swap the transport
+in tests.
+
+Parameter binding: FalkorDB does not yet support Bolt-style parameter
+binding, so the driver transparently rewrites `\$param` queries with a
+`CYPHER name='val' …` prelude. See the FalkorDB guide for details.
+"""
 mutable struct FalkorDBDriver <: AbstractGraphDriver
     host::String
     port::Int

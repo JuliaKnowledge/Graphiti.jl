@@ -1,5 +1,14 @@
 """In-memory graph driver backed by dictionaries."""
 
+"""
+    MemoryDriver()
+
+In-memory graph backend that stores nodes and edges in plain Julia
+`Dict`s. Useful for tests, quick experiments, and scenarios where
+persistence is not required. Implements the full `AbstractGraphDriver`
+interface (`save_node!`, `save_edge!`, `get_*`, `delete_*`, `clear!`,
+`execute_query`).
+"""
 mutable struct MemoryDriver <: AbstractGraphDriver
     entity_nodes::Dict{String, EntityNode}
     episodic_nodes::Dict{String, EpisodicNode}

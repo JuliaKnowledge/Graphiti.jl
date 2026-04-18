@@ -1,5 +1,13 @@
 """LLM client abstraction and EchoLLMClient for offline testing."""
 
+"""
+    AbstractLLMClient
+
+Supertype for LLM completion backends. Concrete subtypes implement
+`complete(client, prompt; kwargs...)::String` and (optionally)
+`complete_json` for structured output. Concrete implementations:
+`EchoLLMClient`, `OpenAILLMClient`, `AzureOpenAILLMClient`.
+"""
 abstract type AbstractLLMClient end
 
 complete(c::AbstractLLMClient, messages; kwargs...)::String =

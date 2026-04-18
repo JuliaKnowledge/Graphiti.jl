@@ -4,6 +4,14 @@ The `AbstractCrossEncoder` type is declared in `types.jl` so that
 `SearchConfig` can reference it.  Concrete implementations live here.
 """
 
+"""
+    rerank(encoder::AbstractCrossEncoder, query::String, documents::Vector{String}) -> Vector{Float64}
+
+Score each `document` against `query` and return one relevance score per
+document (higher = more relevant). Concrete implementations:
+[`DummyCrossEncoder`](@ref) (deterministic random scores for tests),
+[`LLMCrossEncoder`](@ref) (LLM-as-judge).
+"""
 rerank(enc::AbstractCrossEncoder, query::String, documents::Vector{String})::Vector{Float64} =
     error("rerank not implemented for $(typeof(enc))")
 

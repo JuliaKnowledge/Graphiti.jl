@@ -6,6 +6,7 @@ makedocs(
     modules   = [Graphiti],
     doctest   = false,
     warnonly  = true,
+    checkdocs = :exports,
     format    = Documenter.HTML(
         prettyurls = get(ENV, "CI", "false") == "true",
     ),
