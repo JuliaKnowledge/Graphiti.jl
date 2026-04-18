@@ -1,5 +1,15 @@
 """Abstract graph driver interface."""
 
+"""
+    AbstractGraphDriver
+
+Supertype for storage backends. Concrete subtypes implement the
+ingestion and retrieval methods used by [`GraphitiClient`](@ref):
+`save_node!`, `save_edge!`, `get_node`, `get_edge`, `delete_node!`,
+`delete_edge!`, `clear!`, `execute_query`, plus the typed `get_*`
+helpers. See [`MemoryDriver`](@ref), [`Neo4jDriver`](@ref),
+[`FalkorDBDriver`](@ref), [`KuzuDriver`](@ref).
+"""
 abstract type AbstractGraphDriver end
 
 execute_query(d::AbstractGraphDriver, query::String; params::Dict=Dict()) =

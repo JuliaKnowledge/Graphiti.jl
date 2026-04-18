@@ -41,6 +41,15 @@ function _neo4j_parse_response(body::String)::Vector{Dict{String, Any}}
     return rows
 end
 
+"""
+    Neo4jDriver(; url, user, password, database, _request_fn)
+
+HTTP-transport driver for [Neo4j](https://neo4j.com). Defaults pull from
+`NEO4J_URL`, `NEO4J_USER`, `NEO4J_PASSWORD`, and `NEO4J_DATABASE` env
+vars. The `_request_fn` hook accepts `(url, headers, body) ->
+(status, body)` and lets you stub HTTP calls in tests; the default uses
+`HTTP.post`.
+"""
 mutable struct Neo4jDriver <: AbstractGraphDriver
     url::String
     user::String

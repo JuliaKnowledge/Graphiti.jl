@@ -3,7 +3,7 @@
 [FalkorDB](https://www.falkordb.com) is a Redis-backed graph database
 that exposes the OpenCypher query language via the `GRAPH.QUERY` Redis
 command. Graphiti.jl ships a built-in `FalkorDBDriver` that mirrors the
-[`Neo4jDriver`](neo4j.md) feature surface and shares the same
+[`Neo4jDriver`](@ref) feature surface and shares the same
 **injectable transport** pattern for testing.
 
 The driver speaks the RESP2 wire protocol directly using only Julia's

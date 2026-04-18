@@ -1,5 +1,13 @@
 """Embedder abstraction with random and deterministic implementations."""
 
+"""
+    AbstractEmbedder
+
+Supertype for embedding backends. Concrete subtypes implement
+`embed(emb, text::String)::Vector{Float64}` and (optionally) batched
+methods. Concrete implementations: `DeterministicEmbedder`,
+`RandomEmbedder`, `OpenAIEmbedder`, `AzureOpenAIEmbedder`.
+"""
 abstract type AbstractEmbedder end
 
 embed(e::AbstractEmbedder, text::String)::Vector{Float64} =

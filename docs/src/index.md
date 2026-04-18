@@ -67,4 +67,10 @@ ctx = build(builder, "What does Alice do?")
     └────────────┘  └─────────────┘   └──────────────────┘
 ```
 
-See the [Guides](@ref) for detailed documentation on each subsystem.
+See the guide pages on the left for detailed documentation on each subsystem.
+
+## Module reference
+
+```@docs
+Graphiti
+```
