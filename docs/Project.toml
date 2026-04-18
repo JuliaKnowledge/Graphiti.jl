@@ -2,11 +2,11 @@ name = "GraphitiDocs"
 uuid = "d1a2f3b4-5c6e-7890-ab12-cd34ef567890"
 
 [deps]
+AgentFramework = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
+AzureIdentity = "1b7b9afa-6387-4f08-b495-223719ee650f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Graphiti = "7e8c5f2a-4d9b-4f3e-9a1c-2b8d6e7f0a1c"
-
-[sources]
-Graphiti = {path = ".."}
+Mem0 = "111c52c1-a189-4018-bb23-b883ef531b41"
 
 [compat]
 Documenter = "1"
