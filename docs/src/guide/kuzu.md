@@ -81,27 +81,62 @@ into the query text using `_kuzu_inline_params`, which:
 If you wire `_query_fn` to a real `kuzu_prepared_statement` call, you
 can ignore the inliner and bind params natively.
 
-## Connecting libkuzu via FFI
+## Connecting libkuzu via FFI (recommended)
 
-A minimal `_query_fn` using `Libdl` and `ccall` looks like this:
+Graphiti.jl ships an optional [`Graphiti.KuzuFFI`](@ref) submodule that
+wraps just enough of libkuzu's C API to back a `KuzuDriver`. It does
+nothing at module-load time — the `Libdl.dlopen` happens only when you
+call `KuzuFFI.open_driver(...)`, so users without libkuzu installed pay
+no cost.
 
 ```julia
-using Libdl
+using Graphiti
 
-const LIBKUZU = Libdl.dlopen("libkuzu.dylib")
+driver, conn = Graphiti.KuzuFFI.open_driver(
+    "/path/to/libkuzu.dylib";
+    db_path = "./my_kuzu_db",
+    auto_init_schema = true,
+)
 
+save_node!(driver, EntityNode(uuid="u1", name="Alice",
+                                summary="", group_id="g"))
+rows = execute_query(driver, "MATCH (n:Entity) RETURN n.name AS name")
+
+Graphiti.KuzuFFI.close!(conn)   # release libkuzu handles
+```
+
+Public API:
+
+| Symbol | Purpose |
+|--------|---------|
+| `KuzuFFI.open_connection(libpath, db_path)` | Low-level: open libkuzu, create the database, return a `KuzuFFIConnection`. |
+| `KuzuFFI.close!(conn)` | Release the connection, the database, and the dlopen handle. Idempotent; also runs from a finalizer. |
+| `KuzuFFI.execute_cypher(conn, query)` | Run a Cypher string and return `Vector{Dict{String,Any}}`. |
+| `KuzuFFI.make_query_fn(conn)` | Build a closure suitable for `KuzuDriver(_query_fn = …)`. |
+| `KuzuFFI.open_driver(libpath; db_path, auto_init_schema)` | One-liner that does all of the above. |
+
+Currently decoded Kùzu types: `BOOL`, `INT64`, `DOUBLE`, `STRING`. Other
+column types appear in result rows as `"<kuzu type N>"` placeholders;
+extend `KuzuFFI._read_value` if you need richer coverage.
+
+### Rolling your own backend
+
+Because `KuzuDriver` only requires a `_query_fn`, you can bypass
+`KuzuFFI` entirely — wire it to an external microservice, the Python
+client over `PyCall`, or your own ccall layer. The minimum signature:
+
+```julia
 function my_kuzu_query(drv::KuzuDriver, query::String, params::Dict)
     full = Graphiti._kuzu_inline_params(query, params)
-    # … ccall into kuzu_database_init / kuzu_connection_query / …
-    # … parse kuzu_query_result into Vector{Dict{String,Any}}
+    # … hand `full` to your transport, return Vector{Dict{String,Any}} …
 end
 
 driver = KuzuDriver(db_path="./db", _query_fn=my_kuzu_query, auto_init_schema=true)
 ```
 
-A full FFI implementation is beyond the scope of this guide — see the
-[official C API reference](https://docs.kuzudb.com/c/) for the function
-signatures.
+See the [official C API reference](https://docs.kuzudb.com/c/) for the
+full function signatures, or [`Graphiti.KuzuFFI`'s source](https://github.com/JuliaKnowledge/Graphiti.jl/blob/main/src/ffi/kuzu_ffi.jl)
+for a working example.
 
 ## Testing without libkuzu
 

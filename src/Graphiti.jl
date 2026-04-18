@@ -93,6 +93,9 @@ include("triplet.jl")
 # ── MCP (Model Context Protocol) server ──────────────────────────────────────
 include("mcp.jl")
 
+# ── Optional FFI shims (kuzu, …) ─────────────────────────────────────────────
+include("ffi/kuzu_ffi.jl")
+
 # ── Public API exports ───────────────────────────────────────────────────────
 export Graphiti,
        # Enums
