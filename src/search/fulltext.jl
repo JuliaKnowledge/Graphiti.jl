@@ -8,7 +8,25 @@ function tokenize(text::String)::Vector{String}
     return String[t for t in tokens if !isempty(t)]
 end
 
-function bm25_score(query_tokens::Vector{String}, doc_tokens::Vector{String}, avg_dl::Float64)::Float64
+function _bm25_document_frequencies(documents::Vector{Vector{String}})::Dict{String, Int}
+    df = Dict{String, Int}()
+    for doc in documents
+        for token in Set(doc)
+            df[token] = get(df, token, 0) + 1
+        end
+    end
+    return df
+end
+
+_bm25_idf(total_docs::Int, doc_freq::Int) = log((total_docs - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
+
+function bm25_score(
+    query_tokens::Vector{String},
+    doc_tokens::Vector{String},
+    avg_dl::Float64,
+    doc_freqs::Dict{String, Int},
+    total_docs::Int,
+)::Float64
     doc_len = length(doc_tokens)
     doc_len == 0 && return 0.0
     tf_map = Dict{String, Int}()
@@ -20,7 +38,7 @@ function bm25_score(query_tokens::Vector{String}, doc_tokens::Vector{String}, av
     for q in query_tokens
         tf = get(tf_map, q, 0)
         tf == 0 && continue
-        idf = log(1.0 + 1.0 / (tf / doc_len + 0.001))
+        idf = _bm25_idf(total_docs, get(doc_freqs, q, 0))
         tf_norm = tf * (BM25_K1 + 1) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * doc_len / avg_dl))
         score += idf * tf_norm
     end
@@ -40,10 +58,11 @@ function bm25_search_edges(
     isempty(query_tokens) && return EntityEdge[], Float64[]
 
     all_doc_tokens = [tokenize(e.fact) for e in edges]
+    doc_freqs = _bm25_document_frequencies(all_doc_tokens)
     avg_dl = sum(length.(all_doc_tokens)) / length(edges)
     avg_dl == 0 && (avg_dl = 1.0)
 
-    scored = [(e, bm25_score(query_tokens, toks, avg_dl)) for (e, toks) in zip(edges, all_doc_tokens)]
+    scored = [(e, bm25_score(query_tokens, toks, avg_dl, doc_freqs, length(edges))) for (e, toks) in zip(edges, all_doc_tokens)]
     filter!(x -> x[2] > 0.0, scored)
     sort!(scored; by = x -> x[2], rev = true)
     n = min(limit, length(scored))
@@ -63,10 +82,11 @@ function bm25_search_nodes(
     isempty(query_tokens) && return EntityNode[], Float64[]
 
     all_doc_tokens = [tokenize(string(n.name, " ", n.summary)) for n in nodes]
+    doc_freqs = _bm25_document_frequencies(all_doc_tokens)
     avg_dl = sum(length.(all_doc_tokens)) / length(nodes)
     avg_dl == 0 && (avg_dl = 1.0)
 
-    scored = [(n, bm25_score(query_tokens, toks, avg_dl)) for (n, toks) in zip(nodes, all_doc_tokens)]
+    scored = [(n, bm25_score(query_tokens, toks, avg_dl, doc_freqs, length(nodes))) for (n, toks) in zip(nodes, all_doc_tokens)]
     filter!(x -> x[2] > 0.0, scored)
     sort!(scored; by = x -> x[2], rev = true)
     k = min(limit, length(scored))

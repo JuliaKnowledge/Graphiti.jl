@@ -1,7 +1,7 @@
 """LLM-backed relationship extraction between previously extracted entities."""
 
 function extract_edges_from_episode(
-    llm::AbstractLLMClient,
+    source::Union{AbstractLLMClient, GraphitiClient},
     episode::EpisodicNode,
     entities::Vector{EntityNode},
 )::Vector{EntityEdge}
@@ -16,32 +16,7 @@ function extract_edges_from_episode(
     ]
 
     response = try
-        complete_json(llm, messages)
-    catch e
-        @warn "Edge extraction LLM call failed: $e"
-        return EntityEdge[]
-    end
-
-    return _parse_edge_response(response, episode, entities)
-end
-
-function extract_edges_from_episode(
-    client::GraphitiClient,
-    episode::EpisodicNode,
-    entities::Vector{EntityNode},
-)::Vector{EntityEdge}
-    isempty(entities) && return EntityEdge[]
-
-    entity_names = join([e.name for e in entities], ", ")
-    messages = [
-        Dict("role" => "system", "content" => EXTRACT_EDGES_SYSTEM),
-        Dict("role" => "user", "content" => format_prompt(EXTRACT_EDGES_USER;
-            entity_names = entity_names,
-            episode_content = episode.content)),
-    ]
-
-    response = try
-        _complete_json!(client, messages)
+        _complete_json_dispatch(source, messages)
     catch e
         @warn "Edge extraction LLM call failed: $e"
         return EntityEdge[]

@@ -72,6 +72,7 @@ function add_episode_bulk(
             source_description = _ep_field(ep, :source_description, ""),
             group_id = _ep_field(ep, :group_id, group_id),
             valid_at = _ep_field(ep, :valid_at, now(UTC)),
+            reference_time = _ep_field(ep, :reference_time, now(UTC)),
         )
         push!(results, r)
     end

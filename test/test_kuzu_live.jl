@@ -18,7 +18,7 @@ else
     libpath = get(ENV, "KUZU_LIB", "")
     isempty(libpath) && error("KUZU_LIB must point to libkuzu.{so,dylib}")
 
-    db_path = joinpath(mktempdir(), "kuzu_live_db")
+    db_path = joinpath(pwd(), "test", "kuzu_live_db")
     d, conn = Graphiti.KuzuFFI.open_driver(libpath; db_path = db_path,
                                            auto_init_schema = true)
 
@@ -65,7 +65,7 @@ else
             comms = get_community_nodes(d, "g1")
             @test length(comms) == 1
             @test comms[1].name == "Friends"
-            cedges = get_community_edges(d, "c1")
+            cedges = get_community_edges(d, "g1")
             @test length(cedges) == 1
             @test cedges[1].target_node_uuid == "a"
 

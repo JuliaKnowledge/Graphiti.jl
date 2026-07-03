@@ -12,6 +12,11 @@ function bfs_search(
     result_edges = EntityEdge[]
 
     all_edges = isempty(group_id) ? _all_entity_edges(driver) : get_entity_edges(driver, group_id)
+    adjacency = Dict{String, Vector{Tuple{EntityEdge, String}}}()
+    for edge in all_edges
+        push!(get!(adjacency, edge.source_node_uuid, Tuple{EntityEdge, String}[]), (edge, edge.target_node_uuid))
+        push!(get!(adjacency, edge.target_node_uuid, Tuple{EntityEdge, String}[]), (edge, edge.source_node_uuid))
+    end
 
     all_nodes_map = if driver isa MemoryDriver
         driver.entity_nodes
@@ -20,9 +25,11 @@ function bfs_search(
     end
 
     queue = Tuple{String, Int}[(uuid, 0) for uuid in seed_node_uuids]
+    queue_idx = 1
 
-    while !isempty(queue)
-        (uuid, depth) = popfirst!(queue)
+    while queue_idx <= length(queue)
+        (uuid, depth) = queue[queue_idx]
+        queue_idx += 1
         uuid in visited_nodes && continue
         push!(visited_nodes, uuid)
 
@@ -32,15 +39,11 @@ function bfs_search(
 
         depth >= max_depth && continue
 
-        for edge in all_edges
-            if edge.source_node_uuid == uuid || edge.target_node_uuid == uuid
-                edge.uuid in visited_edges && continue
-                push!(visited_edges, edge.uuid)
-                push!(result_edges, edge)
-                neighbor = edge.source_node_uuid == uuid ?
-                    edge.target_node_uuid : edge.source_node_uuid
-                neighbor in visited_nodes || push!(queue, (neighbor, depth + 1))
-            end
+        for (edge, neighbor) in get(adjacency, uuid, Tuple{EntityEdge, String}[])
+            edge.uuid in visited_edges && continue
+            push!(visited_edges, edge.uuid)
+            push!(result_edges, edge)
+            neighbor in visited_nodes || push!(queue, (neighbor, depth + 1))
         end
     end
 

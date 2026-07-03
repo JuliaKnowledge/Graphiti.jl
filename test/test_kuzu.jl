@@ -1,5 +1,6 @@
 using Test
 using Graphiti
+using Dates
 
 @testset "KuzuDriver" begin
 
@@ -86,7 +87,9 @@ using Graphiti
         captured = Ref{Tuple{String,Dict}}(("", Dict()))
         stub = (drv, q, p) -> (captured[] = (q, p); Dict{String,Any}[])
         d = KuzuDriver(_query_fn = stub)
-        n = EntityNode(uuid = "u1", name = "Alice", summary = "hi", group_id = "g")
+        n = EntityNode(uuid = "u1", name = "Alice", name_embedding = [1.0, 2.0],
+            summary = "hi", group_id = "g", labels = ["Person"],
+            attributes = Dict("role" => "engineer"))
         save_node!(d, n)
         q, p = captured[]
         @test occursin("MERGE (n:Entity {uuid: \$uuid})", q)
@@ -95,17 +98,24 @@ using Graphiti
         @test p["uuid"] == "u1"
         @test p["name"] == "Alice"
         @test p["group_id"] == "g"
+        @test p["name_embedding"] == "[1.0,2.0]"
+        @test p["labels"] == "[\"Person\"]"
     end
 
     @testset "save_node! EpisodicNode" begin
         captured = Ref{Tuple{String,Dict}}(("", Dict()))
         stub = (drv, q, p) -> (captured[] = (q, p); Dict{String,Any}[])
         d = KuzuDriver(_query_fn = stub)
-        n = EpisodicNode(uuid = "e1", name = "ep", content = "text", group_id = "g")
+        n = EpisodicNode(uuid = "e1", name = "ep", content = "text",
+            content_embedding = [0.1, 0.2], source = MESSAGE,
+            source_description = "user", group_id = "g", entity_edges = ["r1"],
+            saga_uuid = "s1")
         save_node!(d, n)
         q, p = captured[]
         @test occursin(":Episodic", q)
         @test p["content"] == "text"
+        @test p["content_embedding"] == "[0.1,0.2]"
+        @test p["entity_edges"] == "[\"r1\"]"
     end
 
     @testset "save_node! CommunityNode" begin
@@ -134,7 +144,10 @@ using Graphiti
         stub = (drv, q, p) -> (captured[] = (q, p); Dict{String,Any}[])
         d = KuzuDriver(_query_fn = stub)
         e = EntityEdge(uuid = "r1", source_node_uuid = "a", target_node_uuid = "b",
-                       name = "knows", fact = "Alice knows Bob", group_id = "g")
+                       name = "knows", fact = "Alice knows Bob",
+                       fact_embedding = [0.1, 0.2], episodes = ["ep1"],
+                       group_id = "g", reference_time = DateTime(2024, 1, 1, 12, 0, 0),
+                       attributes = Dict("confidence" => 0.9))
         save_edge!(d, e)
         q, p = captured[]
         @test occursin("MATCH (a:Entity", q)
@@ -142,6 +155,9 @@ using Graphiti
         @test occursin(":RELATES_TO", q)
         @test p["src"] == "a" && p["tgt"] == "b"
         @test p["fact"] == "Alice knows Bob"
+        @test p["fact_embedding"] == "[0.1,0.2]"
+        @test p["episodes"] == "[\"ep1\"]"
+        @test p["attributes"] == "{\"confidence\":0.9}"
     end
 
     @testset "save_edge! EpisodicEdge (MENTIONS)" begin
@@ -235,13 +251,17 @@ using Graphiti
     end
 
     @testset "get_community_edges" begin
-        rows = [Dict{String,Any}("uuid" => "h1", "src" => "c", "tgt" => "e", "group_id" => "g")]
-        stub = (drv, q, p) -> rows
+        rows = [Dict{String,Any}("uuid" => "h1", "src" => "c", "tgt" => "e", "group_id" => "g", "created_at" => "2024-01-03T00:00:00.000")]
+        captured = Ref{Tuple{String,Dict}}(("", Dict()))
+        stub = (drv, q, p) -> (captured[] = (q, p); rows)
         d = KuzuDriver(_query_fn = stub)
-        out = get_community_edges(d, "c")
+        out = get_community_edges(d, "g")
         @test length(out) == 1
         @test out[1].source_node_uuid == "c"
         @test out[1].target_node_uuid == "e"
+        q, p = captured[]
+        @test occursin("WHERE r.group_id = \$group_id", q)
+        @test p["group_id"] == "g"
     end
 
     @testset "get_saga_nodes" begin
@@ -265,14 +285,47 @@ using Graphiti
         @test p["saga_uuid"] == "saga1"
     end
 
-    @testset "get_entity_*/get_episodic_* return empty (parity)" begin
-        d = KuzuDriver(_query_fn = (drv, q, p) -> Dict{String,Any}[])
-        @test get_entity_nodes(d, "g") == EntityNode[]
-        @test get_entity_edges(d, "g") == EntityEdge[]
-        @test get_episodic_nodes(d, "g") == EpisodicNode[]
-        @test get_latest_episodic_node(d, "g") === nothing
-        @test get_node(d, "any") === nothing
-        @test get_edge(d, "any") === nothing
+    @testset "typed reads and point lookups parse full schema" begin
+        stub = (drv, q, p) -> begin
+            if occursin("MATCH (n:Entity)", q)
+                return [Dict{String,Any}(
+                    "uuid" => "u1", "name" => "Alice", "name_embedding" => "[1.0,2.0]",
+                    "summary" => "hi", "group_id" => "g", "labels" => "[\"Person\"]",
+                    "attributes" => "{\"role\":\"engineer\"}", "created_at" => "2024-01-01T09:00:00.000",
+                )]
+            elseif occursin("MATCH (a:Entity)-[r:RELATES_TO", q)
+                return [Dict{String,Any}(
+                    "uuid" => "r1", "src" => "u1", "tgt" => "u2", "name" => "knows",
+                    "fact" => "Alice knows Bob", "fact_embedding" => "[0.1,0.2]",
+                    "episodes" => "[\"ep1\"]", "group_id" => "g",
+                    "valid_at" => "2024-01-02T10:00:00.000", "invalid_at" => nothing,
+                    "expired_at" => nothing, "reference_time" => "2024-01-03T12:00:00.000",
+                    "attributes" => "{\"confidence\":0.9}", "created_at" => "2024-01-02T10:00:01.000",
+                )]
+            elseif occursin("MATCH (n:Episodic)", q)
+                return [Dict{String,Any}(
+                    "uuid" => "ep1", "name" => "ep", "content" => "text",
+                    "content_embedding" => "[0.3,0.4]", "source" => "MESSAGE",
+                    "source_description" => "user", "valid_at" => "2024-01-02T10:00:00.000",
+                    "group_id" => "g", "entity_edges" => "[\"r1\"]", "saga_uuid" => "s1",
+                    "created_at" => "2024-01-02T10:05:00.000",
+                )]
+            else
+                return Dict{String,Any}[]
+            end
+        end
+        d = KuzuDriver(_query_fn = stub)
+        @test get_entity_nodes(d, "g")[1].attributes["role"] == "engineer"
+        @test get_entity_edges(d, "g")[1].episodes == ["ep1"]
+        @test get_episodic_nodes(d, "g")[1].source == MESSAGE
+        @test get_latest_episodic_node(d, "g").uuid == "ep1"
+        @test get_node(d, "u1") isa EntityNode
+        @test get_edge(d, "r1") isa EntityEdge
+    end
+
+    @testset "KuzuFFI system config layout matches platform" begin
+        fields = fieldnames(Graphiti.KuzuFFI.KuzuSystemConfig)
+        @test (:thread_qos in fields) == Sys.isapple()
     end
 
     # ── error display ───────────────────────────────────────────────────────

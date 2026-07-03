@@ -108,16 +108,16 @@ end
 # ── schema ───────────────────────────────────────────────────────────────────
 
 const KUZU_NODE_TABLES = [
-    ("Entity",    "uuid STRING, name STRING, summary STRING, group_id STRING, PRIMARY KEY(uuid)"),
-    ("Episodic",  "uuid STRING, name STRING, content STRING, group_id STRING, saga_uuid STRING, PRIMARY KEY(uuid)"),
-    ("Community", "uuid STRING, name STRING, summary STRING, group_id STRING, PRIMARY KEY(uuid)"),
-    ("Saga",      "uuid STRING, name STRING, summary STRING, group_id STRING, PRIMARY KEY(uuid)"),
+    ("Entity",    "uuid STRING, name STRING, name_embedding STRING, summary STRING, group_id STRING, labels STRING, attributes STRING, created_at STRING, PRIMARY KEY(uuid)"),
+    ("Episodic",  "uuid STRING, name STRING, content STRING, content_embedding STRING, source STRING, source_description STRING, valid_at STRING, group_id STRING, entity_edges STRING, saga_uuid STRING, created_at STRING, PRIMARY KEY(uuid)"),
+    ("Community", "uuid STRING, name STRING, name_embedding STRING, summary STRING, group_id STRING, created_at STRING, PRIMARY KEY(uuid)"),
+    ("Saga",      "uuid STRING, name STRING, summary STRING, group_id STRING, last_updated STRING, PRIMARY KEY(uuid)"),
 ]
 
 const KUZU_REL_TABLES = [
-    ("RELATES_TO", "FROM Entity TO Entity, uuid STRING, name STRING, fact STRING, group_id STRING"),
-    ("MENTIONS",   "FROM Episodic TO Entity, uuid STRING, group_id STRING"),
-    ("HAS_MEMBER", "FROM Community TO Entity, uuid STRING, group_id STRING"),
+    ("RELATES_TO", "FROM Entity TO Entity, uuid STRING, name STRING, fact STRING, fact_embedding STRING, episodes STRING, group_id STRING, valid_at STRING, invalid_at STRING, expired_at STRING, reference_time STRING, attributes STRING, created_at STRING"),
+    ("MENTIONS",   "FROM Episodic TO Entity, uuid STRING, group_id STRING, created_at STRING"),
+    ("HAS_MEMBER", "FROM Community TO Entity, uuid STRING, group_id STRING, created_at STRING"),
 ]
 
 """
@@ -143,104 +143,171 @@ function execute_query(d::KuzuDriver, query::String; params::Dict = Dict())::Vec
     return d._query_fn(d, query, params)
 end
 
+_kuzu_where_group(alias::String, group_id::String) =
+    isempty(group_id) ? "" : " WHERE $alias.group_id = \$group_id"
+
+_kuzu_entity_node_projection(alias::String = "n") =
+    "$alias.uuid AS uuid, $alias.name AS name, $alias.name_embedding AS name_embedding, " *
+    "$alias.summary AS summary, $alias.group_id AS group_id, $alias.labels AS labels, " *
+    "$alias.attributes AS attributes, $alias.created_at AS created_at"
+
+_kuzu_episodic_node_projection(alias::String = "n") =
+    "$alias.uuid AS uuid, $alias.name AS name, $alias.content AS content, " *
+    "$alias.content_embedding AS content_embedding, $alias.source AS source, " *
+    "$alias.source_description AS source_description, $alias.valid_at AS valid_at, " *
+    "$alias.group_id AS group_id, $alias.entity_edges AS entity_edges, " *
+    "$alias.saga_uuid AS saga_uuid, $alias.created_at AS created_at"
+
+_kuzu_community_node_projection(alias::String = "n") =
+    "$alias.uuid AS uuid, $alias.name AS name, $alias.name_embedding AS name_embedding, " *
+    "$alias.summary AS summary, $alias.group_id AS group_id, $alias.created_at AS created_at"
+
+_kuzu_saga_node_projection(alias::String = "n") =
+    "$alias.uuid AS uuid, $alias.name AS name, $alias.summary AS summary, " *
+    "$alias.group_id AS group_id, $alias.last_updated AS last_updated"
+
+_kuzu_entity_edge_projection(rel::String = "r", src::String = "a", tgt::String = "b") =
+    "$rel.uuid AS uuid, $src.uuid AS src, $tgt.uuid AS tgt, $rel.name AS name, " *
+    "$rel.fact AS fact, $rel.fact_embedding AS fact_embedding, $rel.episodes AS episodes, " *
+    "$rel.group_id AS group_id, $rel.valid_at AS valid_at, $rel.invalid_at AS invalid_at, " *
+    "$rel.expired_at AS expired_at, $rel.reference_time AS reference_time, " *
+    "$rel.attributes AS attributes, $rel.created_at AS created_at"
+
+_kuzu_simple_edge_projection(rel::String = "r", src::String = "a", tgt::String = "b") =
+    "$rel.uuid AS uuid, $src.uuid AS src, $tgt.uuid AS tgt, $rel.group_id AS group_id, " *
+    "$rel.created_at AS created_at"
+
 # ── mutations ────────────────────────────────────────────────────────────────
 # Kùzu MERGE semantics: `MERGE (n:Entity {uuid: '…'}) ON CREATE SET … ON MATCH SET …`
 
 function save_node!(d::KuzuDriver, n::EntityNode)
+    params = _entity_node_params(n)
     q = """
     MERGE (n:Entity {uuid: \$uuid})
-    ON CREATE SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
-    ON MATCH  SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
+    ON CREATE SET n.name = \$name, n.name_embedding = \$name_embedding, n.summary = \$summary,
+                  n.group_id = \$group_id, n.labels = \$labels, n.attributes = \$attributes,
+                  n.created_at = \$created_at
+    ON MATCH  SET n.name = \$name, n.name_embedding = \$name_embedding, n.summary = \$summary,
+                  n.group_id = \$group_id, n.labels = \$labels, n.attributes = \$attributes,
+                  n.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => n.uuid, "name" => n.name,
-        "summary" => n.summary, "group_id" => n.group_id,
-    ))
+    execute_query(d, q; params = params)
     return n
 end
 
 function save_node!(d::KuzuDriver, n::EpisodicNode)
+    params = _episodic_node_params(n)
     q = """
     MERGE (n:Episodic {uuid: \$uuid})
-    ON CREATE SET n.name = \$name, n.content = \$content, n.group_id = \$group_id
-    ON MATCH  SET n.name = \$name, n.content = \$content, n.group_id = \$group_id
+    ON CREATE SET n.name = \$name, n.content = \$content, n.content_embedding = \$content_embedding,
+                  n.source = \$source, n.source_description = \$source_description,
+                  n.valid_at = \$valid_at, n.group_id = \$group_id,
+                  n.entity_edges = \$entity_edges, n.saga_uuid = \$saga_uuid,
+                  n.created_at = \$created_at
+    ON MATCH  SET n.name = \$name, n.content = \$content, n.content_embedding = \$content_embedding,
+                  n.source = \$source, n.source_description = \$source_description,
+                  n.valid_at = \$valid_at, n.group_id = \$group_id,
+                  n.entity_edges = \$entity_edges, n.saga_uuid = \$saga_uuid,
+                  n.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => n.uuid, "name" => n.name,
-        "content" => n.content, "group_id" => n.group_id,
-    ))
+    execute_query(d, q; params = params)
     return n
 end
 
 function save_node!(d::KuzuDriver, n::CommunityNode)
+    params = _community_node_params(n)
     q = """
     MERGE (n:Community {uuid: \$uuid})
-    ON CREATE SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
-    ON MATCH  SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
+    ON CREATE SET n.name = \$name, n.name_embedding = \$name_embedding, n.summary = \$summary,
+                  n.group_id = \$group_id, n.created_at = \$created_at
+    ON MATCH  SET n.name = \$name, n.name_embedding = \$name_embedding, n.summary = \$summary,
+                  n.group_id = \$group_id, n.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => n.uuid, "name" => n.name,
-        "summary" => n.summary, "group_id" => n.group_id,
-    ))
+    execute_query(d, q; params = params)
     return n
 end
 
 function save_node!(d::KuzuDriver, n::SagaNode)
+    params = _saga_node_params(n)
     q = """
     MERGE (n:Saga {uuid: \$uuid})
-    ON CREATE SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
-    ON MATCH  SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id
+    ON CREATE SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id,
+                  n.last_updated = \$last_updated
+    ON MATCH  SET n.name = \$name, n.summary = \$summary, n.group_id = \$group_id,
+                  n.last_updated = \$last_updated
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => n.uuid, "name" => n.name,
-        "summary" => n.summary, "group_id" => n.group_id,
-    ))
+    execute_query(d, q; params = params)
     return n
 end
 
 function save_edge!(d::KuzuDriver, e::EntityEdge)
+    params = _entity_edge_params(e)
     q = """
     MATCH (a:Entity {uuid: \$src}), (b:Entity {uuid: \$tgt})
     MERGE (a)-[r:RELATES_TO {uuid: \$uuid}]->(b)
-    SET r.name = \$name, r.fact = \$fact, r.group_id = \$group_id
+    SET r.name = \$name, r.fact = \$fact, r.fact_embedding = \$fact_embedding,
+        r.episodes = \$episodes, r.group_id = \$group_id, r.valid_at = \$valid_at,
+        r.invalid_at = \$invalid_at, r.expired_at = \$expired_at,
+        r.reference_time = \$reference_time, r.attributes = \$attributes,
+        r.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => e.uuid, "src" => e.source_node_uuid, "tgt" => e.target_node_uuid,
-        "name" => e.name, "fact" => e.fact, "group_id" => e.group_id,
-    ))
+    execute_query(d, q; params = params)
     return e
 end
 
 function save_edge!(d::KuzuDriver, e::EpisodicEdge)
+    params = _episodic_edge_params(e)
     q = """
     MATCH (a:Episodic {uuid: \$src}), (b:Entity {uuid: \$tgt})
     MERGE (a)-[r:MENTIONS {uuid: \$uuid}]->(b)
-    SET r.group_id = \$group_id
+    SET r.group_id = \$group_id, r.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => e.uuid, "src" => e.source_node_uuid,
-        "tgt" => e.target_node_uuid, "group_id" => e.group_id,
-    ))
+    execute_query(d, q; params = params)
     return e
 end
 
 function save_edge!(d::KuzuDriver, e::CommunityEdge)
+    params = _community_edge_params(e)
     q = """
     MATCH (a:Community {uuid: \$src}), (b:Entity {uuid: \$tgt})
     MERGE (a)-[r:HAS_MEMBER {uuid: \$uuid}]->(b)
-    SET r.group_id = \$group_id
+    SET r.group_id = \$group_id, r.created_at = \$created_at
     """
-    execute_query(d, q; params = Dict(
-        "uuid" => e.uuid, "src" => e.source_node_uuid,
-        "tgt" => e.target_node_uuid, "group_id" => e.group_id,
-    ))
+    execute_query(d, q; params = params)
     return e
 end
 
 # ── deletions ────────────────────────────────────────────────────────────────
 
-get_node(::KuzuDriver, ::String) = nothing
-get_edge(::KuzuDriver, ::String) = nothing
+function get_node(d::KuzuDriver, uuid::String)
+    params = Dict("uuid" => uuid)
+    rows = execute_query(d, "MATCH (n:Entity) WHERE n.uuid = \$uuid RETURN $(_kuzu_entity_node_projection())"; params = params)
+    !isempty(rows) && return _entity_node_from_row(rows[1])
+    rows = execute_query(d, "MATCH (n:Episodic) WHERE n.uuid = \$uuid RETURN $(_kuzu_episodic_node_projection())"; params = params)
+    !isempty(rows) && return _episodic_node_from_row(rows[1])
+    rows = execute_query(d, "MATCH (n:Community) WHERE n.uuid = \$uuid RETURN $(_kuzu_community_node_projection())"; params = params)
+    !isempty(rows) && return _community_node_from_row(rows[1])
+    rows = execute_query(d, "MATCH (n:Saga) WHERE n.uuid = \$uuid RETURN $(_kuzu_saga_node_projection())"; params = params)
+    !isempty(rows) && return _saga_node_from_row(rows[1])
+    return nothing
+end
+
+function get_edge(d::KuzuDriver, uuid::String)
+    params = Dict("uuid" => uuid)
+    rows = execute_query(d,
+        "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.uuid = \$uuid RETURN $(_kuzu_entity_edge_projection())";
+        params = params)
+    !isempty(rows) && return _entity_edge_from_row(rows[1])
+    rows = execute_query(d,
+        "MATCH (a:Episodic)-[r:MENTIONS]->(b:Entity) WHERE r.uuid = \$uuid RETURN $(_kuzu_simple_edge_projection())";
+        params = params)
+    !isempty(rows) && return _episodic_edge_from_row(rows[1])
+    rows = execute_query(d,
+        "MATCH (a:Community)-[r:HAS_MEMBER]->(b:Entity) WHERE r.uuid = \$uuid RETURN $(_kuzu_simple_edge_projection())";
+        params = params)
+    !isempty(rows) && return _community_edge_from_row(rows[1])
+    return nothing
+end
 
 function delete_node!(d::KuzuDriver, uuid::String)
     execute_query(d, "MATCH (n) WHERE n.uuid = \$uuid DETACH DELETE n";
@@ -277,61 +344,53 @@ function clear!(d::KuzuDriver)
     return d
 end
 
-# ── reads (parity with Neo4jDriver scope) ────────────────────────────────────
-
-get_entity_nodes(::KuzuDriver, ::String)::Vector{EntityNode}     = EntityNode[]
-get_entity_edges(::KuzuDriver, ::String)::Vector{EntityEdge}     = EntityEdge[]
-get_episodic_nodes(::KuzuDriver, ::String)::Vector{EpisodicNode} = EpisodicNode[]
-get_latest_episodic_node(::KuzuDriver, ::String)::Union{Nothing,EpisodicNode} = nothing
-
-function get_community_nodes(d::KuzuDriver, group_id::String)::Vector{CommunityNode}
-    q = isempty(group_id) ?
-        "MATCH (n:Community) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id" :
-        "MATCH (n:Community) WHERE n.group_id = \$group_id RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id"
-    rows = isempty(group_id) ? execute_query(d, q) :
-        execute_query(d, q; params = Dict("group_id" => group_id))
-    return [CommunityNode(
-        uuid = string(get(r, "uuid", "")),
-        name = string(get(r, "name", "")),
-        summary = string(get(r, "summary", "")),
-        group_id = string(get(r, "group_id", "")),
-    ) for r in rows]
+function get_entity_nodes(d::KuzuDriver, group_id::String)::Vector{EntityNode}
+    q = "MATCH (n:Entity)$(_kuzu_where_group("n", group_id)) RETURN $(_kuzu_entity_node_projection())"
+    rows = isempty(group_id) ? execute_query(d, q) : execute_query(d, q; params = Dict("group_id" => group_id))
+    return [_entity_node_from_row(r) for r in rows]
 end
 
-function get_community_edges(d::KuzuDriver, community_uuid::String)::Vector{CommunityEdge}
-    q = "MATCH (c:Community)-[r:HAS_MEMBER]->(n:Entity) WHERE c.uuid = \$uuid " *
-        "RETURN r.uuid AS uuid, c.uuid AS src, n.uuid AS tgt, r.group_id AS group_id"
-    rows = execute_query(d, q; params = Dict("uuid" => community_uuid))
-    return [CommunityEdge(
-        uuid = string(get(r, "uuid", "")),
-        source_node_uuid = string(get(r, "src", "")),
-        target_node_uuid = string(get(r, "tgt", "")),
-        group_id = string(get(r, "group_id", "")),
-    ) for r in rows]
+function get_entity_edges(d::KuzuDriver, group_id::String)::Vector{EntityEdge}
+    q = "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity)$(_kuzu_where_group("r", group_id)) RETURN $(_kuzu_entity_edge_projection())"
+    rows = isempty(group_id) ? execute_query(d, q) : execute_query(d, q; params = Dict("group_id" => group_id))
+    return [_entity_edge_from_row(r) for r in rows]
+end
+
+function get_episodic_nodes(d::KuzuDriver, group_id::String)::Vector{EpisodicNode}
+    q = "MATCH (n:Episodic)$(_kuzu_where_group("n", group_id)) RETURN $(_kuzu_episodic_node_projection())"
+    rows = isempty(group_id) ? execute_query(d, q) : execute_query(d, q; params = Dict("group_id" => group_id))
+    return [_episodic_node_from_row(r) for r in rows]
+end
+
+function get_latest_episodic_node(d::KuzuDriver, group_id::String)::Union{Nothing,EpisodicNode}
+    nodes = get_episodic_nodes(d, group_id)
+    isempty(nodes) && return nothing
+    return reduce((a, b) -> a.valid_at >= b.valid_at ? a : b, nodes)
+end
+
+function get_community_nodes(d::KuzuDriver, group_id::String)::Vector{CommunityNode}
+    q = "MATCH (n:Community)$(_kuzu_where_group("n", group_id)) RETURN $(_kuzu_community_node_projection())"
+    rows = isempty(group_id) ? execute_query(d, q) :
+        execute_query(d, q; params = Dict("group_id" => group_id))
+    return [_community_node_from_row(r) for r in rows]
+end
+
+function get_community_edges(d::KuzuDriver, group_id::String)::Vector{CommunityEdge}
+    q = "MATCH (c:Community)-[r:HAS_MEMBER]->(n:Entity)$(_kuzu_where_group("r", group_id)) RETURN $(_kuzu_simple_edge_projection())"
+    rows = isempty(group_id) ? execute_query(d, q) : execute_query(d, q; params = Dict("group_id" => group_id))
+    return [_community_edge_from_row(r) for r in rows]
 end
 
 function get_saga_nodes(d::KuzuDriver, group_id::String)::Vector{SagaNode}
-    q = isempty(group_id) ?
-        "MATCH (n:Saga) RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id" :
-        "MATCH (n:Saga) WHERE n.group_id = \$group_id RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, n.group_id AS group_id"
+    q = "MATCH (n:Saga)$(_kuzu_where_group("n", group_id)) RETURN $(_kuzu_saga_node_projection())"
     rows = isempty(group_id) ? execute_query(d, q) :
         execute_query(d, q; params = Dict("group_id" => group_id))
-    return [SagaNode(
-        uuid = string(get(r, "uuid", "")),
-        name = string(get(r, "name", "")),
-        summary = string(get(r, "summary", "")),
-        group_id = string(get(r, "group_id", "")),
-    ) for r in rows]
+    return [_saga_node_from_row(r) for r in rows]
 end
 
 function get_episodes_for_saga(d::KuzuDriver, saga_uuid::String)::Vector{EpisodicNode}
     q = "MATCH (n:Episodic) WHERE n.saga_uuid = \$saga_uuid " *
-        "RETURN n.uuid AS uuid, n.name AS name, n.content AS content, n.group_id AS group_id"
+        "RETURN $(_kuzu_episodic_node_projection())"
     rows = execute_query(d, q; params = Dict("saga_uuid" => saga_uuid))
-    return [EpisodicNode(
-        uuid = string(get(r, "uuid", "")),
-        name = string(get(r, "name", "")),
-        content = string(get(r, "content", "")),
-        group_id = string(get(r, "group_id", "")),
-    ) for r in rows]
+    return [_episodic_node_from_row(r) for r in rows]
 end

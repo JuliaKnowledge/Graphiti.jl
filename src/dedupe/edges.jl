@@ -1,5 +1,41 @@
 """Edge deduplication and temporal invalidation."""
 
+_edge_window_key(edge::EntityEdge) = (edge.valid_at, edge.invalid_at)
+
+function _edge_windows_overlap(a::EntityEdge, b::EntityEdge)::Bool
+    a_start, a_end = a.valid_at, a.invalid_at
+    b_start, b_end = b.valid_at, b.invalid_at
+    left_ok = a_end === nothing || b_start === nothing || a_end >= b_start
+    right_ok = b_end === nothing || a_start === nothing || b_end >= a_start
+    return left_ok && right_ok
+end
+
+function _merge_edge_temporal_window!(canonical::EntityEdge, incoming::EntityEdge)
+    if canonical.valid_at === nothing
+        canonical.valid_at = incoming.valid_at
+    elseif incoming.valid_at !== nothing
+        canonical.valid_at = min(canonical.valid_at, incoming.valid_at)
+    end
+
+    if canonical.invalid_at === nothing || incoming.invalid_at === nothing
+        canonical.invalid_at = nothing
+    elseif incoming.invalid_at !== nothing
+        canonical.invalid_at = max(canonical.invalid_at, incoming.invalid_at)
+    end
+
+    if canonical.expired_at === nothing
+        canonical.expired_at = incoming.expired_at
+    elseif incoming.expired_at !== nothing
+        canonical.expired_at = max(canonical.expired_at, incoming.expired_at)
+    end
+    return canonical
+end
+
+_dedupe_bucket_key(edge::EntityEdge) =
+    (edge.source_node_uuid, edge.target_node_uuid, edge.name)
+
+_invalidation_bucket_key(edge::EntityEdge) = (edge.source_node_uuid, edge.name)
+
 function dedupe_edges!(
     driver::AbstractGraphDriver,
     embedder::AbstractEmbedder,
@@ -8,18 +44,19 @@ function dedupe_edges!(
     sim_threshold::Float64 = 0.85,
 )::Vector{EntityEdge}
     canonical = EntityEdge[]
+    existing_by_key = Dict{Tuple{String, String, String}, Vector{EntityEdge}}()
+    for edge in get_entity_edges(driver, group_id)
+        push!(get!(existing_by_key, _dedupe_bucket_key(edge), EntityEdge[]), edge)
+    end
 
     for edge in new_edges
         if edge.fact_embedding === nothing
             edge.fact_embedding = embed(embedder, edge.fact)
         end
 
-        existing = get_entity_edges(driver, group_id)
         same_pair = filter(
-            e -> e.source_node_uuid == edge.source_node_uuid &&
-                 e.target_node_uuid == edge.target_node_uuid &&
-                 e.invalid_at === nothing,
-            existing,
+            e -> _edge_windows_overlap(e, edge),
+            get(existing_by_key, _dedupe_bucket_key(edge), EntityEdge[]),
         )
 
         best_match = nothing
@@ -37,10 +74,16 @@ function dedupe_edges!(
             for ep in edge.episodes
                 ep in best_match.episodes || push!(best_match.episodes, ep)
             end
+            _merge_edge_temporal_window!(best_match, edge)
+            if best_match.fact_embedding === nothing
+                best_match.fact_embedding = edge.fact_embedding
+            end
+            isempty(best_match.fact) && (best_match.fact = edge.fact)
             save_edge!(driver, best_match)
             push!(canonical, best_match)
         else
             save_edge!(driver, edge)
+            push!(get!(existing_by_key, _dedupe_bucket_key(edge), EntityEdge[]), edge)
             push!(canonical, edge)
         end
     end
@@ -54,17 +97,18 @@ function invalidate_edges!(
     group_id::String,
     reference_time::DateTime,
 )
+    existing_by_key = Dict{Tuple{String, String}, Vector{EntityEdge}}()
+    for edge in get_entity_edges(driver, group_id)
+        push!(get!(existing_by_key, _invalidation_bucket_key(edge), EntityEdge[]), edge)
+    end
+
     for new_edge in new_edges
-        existing = get_entity_edges(driver, group_id)
-        same_source = filter(
-            e -> e.source_node_uuid == new_edge.source_node_uuid &&
-                 e.name == new_edge.name &&
-                 e.uuid != new_edge.uuid &&
-                 e.invalid_at === nothing,
-            existing,
-        )
+        same_source = get(existing_by_key, _invalidation_bucket_key(new_edge), EntityEdge[])
+        invalidation_time = something(new_edge.valid_at, reference_time)
 
         for old_edge in same_source
+            old_edge.uuid == new_edge.uuid && continue
+            old_edge.invalid_at === nothing || continue
             messages = [
                 Dict("role" => "system", "content" => INVALIDATION_SYSTEM),
                 Dict("role" => "user", "content" => format_prompt(
@@ -76,7 +120,7 @@ function invalidate_edges!(
             try
                 resp = complete_json(llm, messages)
                 if get(resp, "contradicts", false) == true
-                    old_edge.invalid_at = reference_time
+                    old_edge.invalid_at = invalidation_time
                     save_edge!(driver, old_edge)
                 end
             catch e
@@ -92,17 +136,18 @@ function invalidate_edges!(
     group_id::String,
     reference_time::DateTime,
 )
+    existing_by_key = Dict{Tuple{String, String}, Vector{EntityEdge}}()
+    for edge in get_entity_edges(client.driver, group_id)
+        push!(get!(existing_by_key, _invalidation_bucket_key(edge), EntityEdge[]), edge)
+    end
+
     for new_edge in new_edges
-        existing = get_entity_edges(client.driver, group_id)
-        same_source = filter(
-            e -> e.source_node_uuid == new_edge.source_node_uuid &&
-                 e.name == new_edge.name &&
-                 e.uuid != new_edge.uuid &&
-                 e.invalid_at === nothing,
-            existing,
-        )
+        same_source = get(existing_by_key, _invalidation_bucket_key(new_edge), EntityEdge[])
+        invalidation_time = something(new_edge.valid_at, reference_time)
 
         for old_edge in same_source
+            old_edge.uuid == new_edge.uuid && continue
+            old_edge.invalid_at === nothing || continue
             messages = [
                 Dict("role" => "system", "content" => INVALIDATION_SYSTEM),
                 Dict("role" => "user", "content" => format_prompt(
@@ -114,7 +159,7 @@ function invalidate_edges!(
             try
                 resp = _complete_json!(client, messages)
                 if get(resp, "contradicts", false) == true
-                    old_edge.invalid_at = reference_time
+                    old_edge.invalid_at = invalidation_time
                     save_edge!(client.driver, old_edge)
                 end
             catch e

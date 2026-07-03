@@ -158,7 +158,7 @@ using JSON3
         end
         d3 = Neo4jDriver(url = "http://n", user = "u", password = "p",
             database = "neo4j", _request_fn = fake_ce)
-        ces = get_community_edges(d3, "c1")
+        ces = get_community_edges(d3, "g")
         @test length(ces) == 1
         @test ces[1].source_node_uuid == "c1"
         @test ces[1].target_node_uuid == "n1"
@@ -189,6 +189,150 @@ using JSON3
         @test length(eps) == 1
         @test eps[1].uuid == "ep1"
         @test occursin("saga_uuid", captured[][end]["body"])
+    end
+
+    @testset "Neo4j preserves full logical schema" begin
+        make_resp(rows::Vector{<:Dict}) = begin
+            cols = isempty(rows) ? String[] : collect(keys(rows[1]))
+            data = [Dict("row" => [r[c] for c in cols]) for r in rows]
+            JSON3.write(Dict("results" => [Dict("columns" => cols, "data" => data)], "errors" => Any[]))
+        end
+
+        saved_params = Dict{String, Any}[]
+        save_fake = function (url, headers, body)
+            parsed = JSON3.read(body, Dict)
+            push!(saved_params, Dict(parsed["statements"][1]["parameters"]))
+            return (200, make_resp(Dict{String, Any}[Dict("uuid" => "ok")]))
+        end
+        dsave = Neo4jDriver(url = "http://n", user = "u", password = "p",
+            database = "neo4j", _request_fn = save_fake)
+
+        en = EntityNode(
+            uuid = "entity-1",
+            name = "Alice",
+            name_embedding = [1.0, 2.0],
+            summary = "Engineer",
+            group_id = "g",
+            labels = ["Person", "Employee"],
+            attributes = Dict("role" => "engineer"),
+            created_at = DateTime(2024, 1, 1, 9, 0, 0),
+        )
+        ep = EpisodicNode(
+            uuid = "episode-1",
+            name = "ep",
+            content = "Alice joined",
+            content_embedding = [0.5, 0.6],
+            source = MESSAGE,
+            source_description = "user",
+            valid_at = DateTime(2024, 1, 2, 10, 0, 0),
+            group_id = "g",
+            entity_edges = ["edge-1"],
+            saga_uuid = "saga-1",
+            created_at = DateTime(2024, 1, 2, 10, 5, 0),
+        )
+        ee = EntityEdge(
+            uuid = "edge-1",
+            source_node_uuid = "entity-1",
+            target_node_uuid = "entity-2",
+            name = "WORKS_AT",
+            fact = "Alice works at Acme",
+            fact_embedding = [0.1, 0.2],
+            episodes = ["episode-1"],
+            group_id = "g",
+            valid_at = DateTime(2024, 1, 2, 10, 0, 0),
+            invalid_at = DateTime(2024, 2, 1, 0, 0, 0),
+            expired_at = DateTime(2024, 3, 1, 0, 0, 0),
+            reference_time = DateTime(2024, 1, 5, 12, 0, 0),
+            attributes = Dict("confidence" => 0.9),
+            created_at = DateTime(2024, 1, 2, 10, 0, 1),
+        )
+        save_node!(dsave, en)
+        save_node!(dsave, ep)
+        save_edge!(dsave, ee)
+
+        @test saved_params[1]["name_embedding"] == "[1.0,2.0]"
+        @test saved_params[1]["labels"] == "[\"Person\",\"Employee\"]"
+        @test saved_params[2]["content_embedding"] == "[0.5,0.6]"
+        @test saved_params[2]["entity_edges"] == "[\"edge-1\"]"
+        @test saved_params[3]["episodes"] == "[\"episode-1\"]"
+        @test saved_params[3]["attributes"] == "{\"confidence\":0.9}"
+        @test saved_params[3]["reference_time"] == "2024-01-05T12:00:00.000"
+
+        read_fake = function (url, headers, body)
+            parsed = JSON3.read(body, Dict)
+            stmt = String(parsed["statements"][1]["statement"])
+            if occursin("MATCH (n:Entity", stmt)
+                return (200, make_resp(Dict{String, Any}[
+                    Dict(
+                        "uuid" => "entity-1",
+                        "name" => "Alice",
+                        "name_embedding" => "[1.0,2.0]",
+                        "summary" => "Engineer",
+                        "group_id" => "g",
+                        "labels" => "[\"Person\",\"Employee\"]",
+                        "attributes" => "{\"role\":\"engineer\"}",
+                        "created_at" => "2024-01-01T09:00:00.000",
+                    ),
+                ]))
+            elseif occursin("RELATES_TO", stmt)
+                return (200, make_resp(Dict{String, Any}[
+                    Dict(
+                        "uuid" => "edge-1",
+                        "src" => "entity-1",
+                        "tgt" => "entity-2",
+                        "name" => "WORKS_AT",
+                        "fact" => "Alice works at Acme",
+                        "fact_embedding" => "[0.1,0.2]",
+                        "episodes" => "[\"episode-1\"]",
+                        "group_id" => "g",
+                        "valid_at" => "2024-01-02T10:00:00.000",
+                        "invalid_at" => "2024-02-01T00:00:00.000",
+                        "expired_at" => "2024-03-01T00:00:00.000",
+                        "reference_time" => "2024-01-05T12:00:00.000",
+                        "attributes" => "{\"confidence\":0.9}",
+                        "created_at" => "2024-01-02T10:00:01.000",
+                    ),
+                ]))
+            elseif occursin("MATCH (n:Episodic", stmt)
+                return (200, make_resp(Dict{String, Any}[
+                    Dict(
+                        "uuid" => "episode-1",
+                        "name" => "ep",
+                        "content" => "Alice joined",
+                        "content_embedding" => "[0.5,0.6]",
+                        "source" => "MESSAGE",
+                        "source_description" => "user",
+                        "valid_at" => "2024-01-02T10:00:00.000",
+                        "group_id" => "g",
+                        "entity_edges" => "[\"edge-1\"]",
+                        "saga_uuid" => "saga-1",
+                        "created_at" => "2024-01-02T10:05:00.000",
+                    ),
+                ]))
+            else
+                return (200, make_resp(Dict{String, Any}[]))
+            end
+        end
+        dread = Neo4jDriver(url = "http://n", user = "u", password = "p",
+            database = "neo4j", _request_fn = read_fake)
+
+        nodes = get_entity_nodes(dread, "g")
+        @test nodes[1].name_embedding == [1.0, 2.0]
+        @test nodes[1].labels == ["Person", "Employee"]
+        @test nodes[1].attributes["role"] == "engineer"
+
+        edges = get_entity_edges(dread, "g")
+        @test edges[1].episodes == ["episode-1"]
+        @test edges[1].reference_time == DateTime(2024, 1, 5, 12, 0, 0)
+        @test edges[1].attributes["confidence"] == 0.9
+
+        episodes = get_episodic_nodes(dread, "g")
+        @test episodes[1].content_embedding == [0.5, 0.6]
+        @test episodes[1].entity_edges == ["edge-1"]
+        @test episodes[1].source == MESSAGE
+
+        @test get_node(dread, "entity-1") isa EntityNode
+        @test get_edge(dread, "edge-1") isa EntityEdge
     end
 
     @testset "MemoryDriver: get_episodes_for_saga" begin

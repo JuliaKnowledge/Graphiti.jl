@@ -1,5 +1,6 @@
 using Test
 using Graphiti
+using Dates
 using JSON3
 
 @testset "FalkorDBDriver" begin
@@ -138,6 +139,9 @@ using JSON3
         save_node!(d, s)
         @test occursin("MERGE (n:Community", queries[end-1])
         @test occursin("MERGE (n:Saga", queries[end])
+        @test occursin("name_embedding", queries[1])
+        @test occursin("fact_embedding", queries[3])
+        @test occursin("last_updated", queries[end])
     end
 
     @testset "FalkorDBDriver: clear! issues GRAPH.DELETE" begin
@@ -173,12 +177,56 @@ using JSON3
         @test cs[2].name == "Ops team"
     end
 
-    @testset "FalkorDBDriver: get_entity_* return empty (parity with Neo4j)" begin
-        d = FalkorDBDriver(_command_fn=(_, _) -> nothing)
-        @test isempty(get_entity_nodes(d, "g1"))
-        @test isempty(get_entity_edges(d, "g1"))
-        @test isempty(get_episodic_nodes(d, "g1"))
-        @test get_latest_episodic_node(d, "g1") === nothing
+    @testset "FalkorDBDriver: typed reads parse full schema" begin
+        stub_fn = (drv, args) -> begin
+            query = args[3]
+            if occursin("MATCH (n:Entity)", query)
+                return [
+                    [[1, "uuid"], [1, "name"], [1, "name_embedding"], [1, "summary"], [1, "group_id"], [1, "labels"], [1, "attributes"], [1, "created_at"]],
+                    [["e1", "Alice", "[1.0,2.0]", "Engineer", "g1", "[\"Person\"]", "{\"role\":\"engineer\"}", "2024-01-01T09:00:00.000"]],
+                    ["stats"],
+                ]
+            elseif occursin("MATCH (a:Entity)-[r:RELATES_TO", query)
+                return [
+                    [[1, "uuid"], [1, "src"], [1, "tgt"], [1, "name"], [1, "fact"], [1, "fact_embedding"], [1, "episodes"], [1, "group_id"], [1, "valid_at"], [1, "invalid_at"], [1, "expired_at"], [1, "reference_time"], [1, "attributes"], [1, "created_at"]],
+                    [["r1", "e1", "e2", "WORKS_AT", "Alice works at Acme", "[0.1,0.2]", "[\"ep1\"]", "g1", "2024-01-02T10:00:00.000", "", "", "2024-01-05T12:00:00.000", "{\"confidence\":0.9}", "2024-01-02T10:00:01.000"]],
+                    ["stats"],
+                ]
+            elseif occursin("MATCH (n:Episodic)", query)
+                return [
+                    [[1, "uuid"], [1, "name"], [1, "content"], [1, "content_embedding"], [1, "source"], [1, "source_description"], [1, "valid_at"], [1, "group_id"], [1, "entity_edges"], [1, "saga_uuid"], [1, "created_at"]],
+                    [["ep1", "episode", "Alice joined", "[0.5,0.6]", "MESSAGE", "user", "2024-01-02T10:00:00.000", "g1", "[\"r1\"]", "saga1", "2024-01-02T10:05:00.000"]],
+                    ["stats"],
+                ]
+            elseif occursin("MATCH (c:Community)-[r:HAS_MEMBER", query)
+                return [
+                    [[1, "uuid"], [1, "src"], [1, "tgt"], [1, "group_id"], [1, "created_at"]],
+                    [["h1", "c1", "e1", "g1", "2024-01-03T00:00:00.000"]],
+                    ["stats"],
+                ]
+            else
+                return [[], [], ["stats"]]
+            end
+        end
+        d = FalkorDBDriver(_command_fn = stub_fn)
+        nodes = get_entity_nodes(d, "g1")
+        @test nodes[1].name_embedding == [1.0, 2.0]
+        @test nodes[1].labels == ["Person"]
+        @test nodes[1].attributes["role"] == "engineer"
+
+        edges = get_entity_edges(d, "g1")
+        @test edges[1].episodes == ["ep1"]
+        @test edges[1].reference_time == DateTime(2024, 1, 5, 12, 0, 0)
+        @test edges[1].attributes["confidence"] == 0.9
+
+        episodes = get_episodic_nodes(d, "g1")
+        @test episodes[1].content_embedding == [0.5, 0.6]
+        @test episodes[1].entity_edges == ["r1"]
+        @test get_latest_episodic_node(d, "g1").uuid == "ep1"
+
+        cedges = get_community_edges(d, "g1")
+        @test cedges[1].group_id == "g1"
+        @test cedges[1].source_node_uuid == "c1"
     end
 
     @testset "FalkorDBDriver: env-variable construction" begin

@@ -59,6 +59,23 @@ end
         @test edges[1].uuid == e1.uuid
     end
 
+    @testset "BM25 uses corpus document frequency" begin
+        docs = [Graphiti.tokenize("rare common"), Graphiti.tokenize("common common"), Graphiti.tokenize("common")]
+        dfs = Graphiti._bm25_document_frequencies(docs)
+        @test dfs["rare"] == 1
+        @test dfs["common"] == 3
+        @test Graphiti._bm25_idf(length(docs), dfs["rare"]) > Graphiti._bm25_idf(length(docs), dfs["common"])
+
+        d = MemoryDriver()
+        rare = EntityEdge(source_node_uuid = "a", target_node_uuid = "b", name = "REL", fact = "rare common", group_id = "g1")
+        common = EntityEdge(source_node_uuid = "c", target_node_uuid = "d", name = "REL", fact = "common common common", group_id = "g1")
+        save_edge!(d, rare)
+        save_edge!(d, common)
+        edges, scores = bm25_search_edges(d, "rare common", 2; group_id = "g1")
+        @test edges[1].uuid == rare.uuid
+        @test scores[1] > scores[2]
+    end
+
     @testset "BFS traversal" begin
         d, alice, bob, acme, e1, e2, e3 = make_search_fixture()
         nodes, edges = bfs_search(d, [alice.uuid], 2; group_id="g1")
@@ -101,6 +118,36 @@ end
 
         results = search(client, "alice works"; group_id="g1")
         @test !isempty(results.edges) || !isempty(results.nodes)
+    end
+
+    @testset "Search applies MMR reranking to nodes" begin
+        d = MemoryDriver()
+        llm = EchoLLMClient()
+        embedder = DeterministicEmbedder(4)
+        embedder.embeddings["node query"] = normalize_vec([1.0, 0.0, 0.0, 0.0])
+
+        n1 = EntityNode(name = "alice", group_id = "g1")
+        n1.name_embedding = normalize_vec([1.0, 0.0, 0.0, 0.0])
+        n2 = EntityNode(name = "alice clone", group_id = "g1")
+        n2.name_embedding = normalize_vec([0.99, 0.01, 0.0, 0.0])
+        n3 = EntityNode(name = "bob", group_id = "g1")
+        n3.name_embedding = normalize_vec([0.0, 1.0, 0.0, 0.0])
+        save_node!(d, n1); save_node!(d, n2); save_node!(d, n3)
+
+        client = GraphitiClient(d, llm, embedder;
+            config = SearchConfig(
+                search_methods = [COSINE_SIMILARITY],
+                reranker = MMR,
+                include_nodes = true,
+                include_edges = false,
+                limit = 3,
+                mmr_lambda = 0.2,
+            ))
+
+        results = search(client, "node query"; group_id = "g1")
+        @test length(results.nodes) == 3
+        @test n1.uuid == results.nodes[1].uuid
+        @test n3.uuid in [n.uuid for n in results.nodes[1:2]]
     end
 
     @testset "build_context_string" begin

@@ -37,8 +37,7 @@ else
                               fact = "Alice knows Bob", group_id = "g1")
             save_edge!(d, edge)
 
-            # Round-trip via Cypher (read methods on FalkorDBDriver are
-            # intentionally minimal; query directly to verify state)
+            # Round-trip via Cypher / typed reads.
             rows = execute_query(d, "MATCH (n:Entity) RETURN count(n) AS c")
             @test get(rows[1], "c", 0) == 2
 
@@ -70,7 +69,7 @@ else
             communities = get_community_nodes(d, "g1")
             @test length(communities) == 1
             @test communities[1].name == "Friends"
-            edges = get_community_edges(d, "c1")
+            edges = get_community_edges(d, "g1")
             @test length(edges) == 1
             @test edges[1].target_node_uuid == "a"
 

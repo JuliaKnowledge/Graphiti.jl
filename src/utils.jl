@@ -74,6 +74,12 @@ function _complete_json!(client::GraphitiClient, messages; kwargs...)::Dict{Stri
     return resp
 end
 
+_complete_json_dispatch(source::AbstractLLMClient, messages; kwargs...) =
+    complete_json(source, messages; kwargs...)
+
+_complete_json_dispatch(source::GraphitiClient, messages; kwargs...) =
+    _complete_json!(source, messages; kwargs...)
+
 function build_indices_and_constraints(client::GraphitiClient)
     @info "build_indices_and_constraints: no-op for $(typeof(client.driver))"
     return nothing

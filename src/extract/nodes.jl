@@ -1,7 +1,7 @@
 """LLM-backed entity extraction."""
 
 function extract_entities(
-    llm::AbstractLLMClient,
+    source::Union{AbstractLLMClient, GraphitiClient},
     episode::EpisodicNode;
     previous_episodes::Vector{EpisodicNode} = EpisodicNode[],
 )::Vector{EntityNode}
@@ -12,28 +12,7 @@ function extract_entities(
     ]
 
     response = try
-        complete_json(llm, messages)
-    catch e
-        @warn "Entity extraction LLM call failed: $e"
-        return EntityNode[]
-    end
-
-    return _parse_entity_response(response, episode)
-end
-
-function extract_entities(
-    client::GraphitiClient,
-    episode::EpisodicNode;
-    previous_episodes::Vector{EpisodicNode} = EpisodicNode[],
-)::Vector{EntityNode}
-    messages = [
-        Dict("role" => "system", "content" => EXTRACT_ENTITIES_SYSTEM),
-        Dict("role" => "user", "content" => format_prompt(EXTRACT_ENTITIES_USER;
-            episode_content = episode.content)),
-    ]
-
-    response = try
-        _complete_json!(client, messages)
+        _complete_json_dispatch(source, messages)
     catch e
         @warn "Entity extraction LLM call failed: $e"
         return EntityNode[]

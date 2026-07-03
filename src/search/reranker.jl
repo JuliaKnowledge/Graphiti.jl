@@ -2,7 +2,7 @@
 
 function rrf_rerank(
     ranked_lists::Vector{Vector{T}},
-    scored_lists::Vector{Vector{Float64}};
+    _scored_lists::Vector{Vector{Float64}};
     k::Int = 60,
 )::Tuple{Vector{T}, Vector{Float64}} where T
     scores = Dict{T, Float64}()
@@ -53,6 +53,33 @@ function mmr_rerank(
     return items, scores
 end
 
+function _combine_ranked_items(lists::Vector{Vector{T}}, score_lists::Vector{Vector{Float64}})::Tuple{Vector{T}, Vector{Float64}} where T
+    combined = Tuple{T, Float64}[]
+    for (lst, scrs) in zip(lists, score_lists)
+        for (item, score) in zip(lst, scrs)
+            push!(combined, (item, score))
+        end
+    end
+    seen = Set{String}()
+    dedup = Tuple{T, Float64}[]
+    for (item, score) in combined
+        uuid = getfield(item, :uuid)
+        uuid in seen && continue
+        push!(seen, uuid)
+        push!(dedup, (item, score))
+    end
+    sort!(dedup; by = x -> x[2], rev = true)
+    return T[x[1] for x in dedup], Float64[x[2] for x in dedup]
+end
+
+function _fallback_reranker(method::RerankerMethod)
+    if method == NODE_DISTANCE || method == EPISODE_MENTIONS
+        @warn "Reranker $(method) is not implemented; falling back to RRF."
+        return RRF
+    end
+    return method
+end
+
 function _unique_preserve(items::Vector{T}) where T
     seen = Set{T}()
     out = T[]
@@ -71,6 +98,7 @@ function search(
     group_id::String = "",
 )::SearchResults
     query_embedding = embed(client.embedder, query)
+    reranker = _fallback_reranker(config.reranker)
 
     edge_lists = Vector{Vector{EntityEdge}}()
     edge_score_lists = Vector{Vector{Float64}}()
@@ -128,29 +156,16 @@ function search(
     final_edges = EntityEdge[]
     final_edge_scores = Float64[]
     if !isempty(edge_lists)
-        if config.reranker == RRF
+        if reranker == RRF
             final_edges, final_edge_scores = rrf_rerank(edge_lists, edge_score_lists)
-        elseif config.reranker == MMR
+        elseif reranker == MMR
             all_edges = _unique_preserve(vcat(edge_lists...))
             embs = Vector{Float64}[e.fact_embedding !== nothing ? e.fact_embedding :
                                     embed(client.embedder, e.fact) for e in all_edges]
             final_edges, final_edge_scores = mmr_rerank(query_embedding, all_edges, embs;
                 lambda = config.mmr_lambda, limit = config.limit)
         else
-            # Flatten by score
-            combined = Tuple{EntityEdge, Float64}[]
-            for (lst, scrs) in zip(edge_lists, edge_score_lists)
-                for (x, s) in zip(lst, scrs); push!(combined, (x, s)); end
-            end
-            seen = Set{String}()
-            dedup = Tuple{EntityEdge, Float64}[]
-            for (e, s) in combined
-                e.uuid in seen && continue
-                push!(seen, e.uuid); push!(dedup, (e, s))
-            end
-            sort!(dedup; by = x -> x[2], rev = true)
-            final_edges = [x[1] for x in dedup]
-            final_edge_scores = [x[2] for x in dedup]
+            final_edges, final_edge_scores = _combine_ranked_items(edge_lists, edge_score_lists)
         end
         n = min(config.limit, length(final_edges))
         final_edges = final_edges[1:n]
@@ -160,22 +175,17 @@ function search(
     final_nodes = EntityNode[]
     final_node_scores = Float64[]
     if !isempty(node_lists)
-        if config.reranker == RRF
+        if reranker == RRF
             final_nodes, final_node_scores = rrf_rerank(node_lists, node_score_lists)
+        elseif reranker == MMR
+            all_nodes = _unique_preserve(vcat(node_lists...))
+            embs = Vector{Float64}[n.name_embedding !== nothing ? n.name_embedding :
+                                    embed(client.embedder, isempty(n.summary) ? n.name : "$(n.name): $(n.summary)")
+                                   for n in all_nodes]
+            final_nodes, final_node_scores = mmr_rerank(query_embedding, all_nodes, embs;
+                lambda = config.mmr_lambda, limit = config.limit)
         else
-            combined = Tuple{EntityNode, Float64}[]
-            for (lst, scrs) in zip(node_lists, node_score_lists)
-                for (x, s) in zip(lst, scrs); push!(combined, (x, s)); end
-            end
-            seen = Set{String}()
-            dedup = Tuple{EntityNode, Float64}[]
-            for (n, s) in combined
-                n.uuid in seen && continue
-                push!(seen, n.uuid); push!(dedup, (n, s))
-            end
-            sort!(dedup; by = x -> x[2], rev = true)
-            final_nodes = [x[1] for x in dedup]
-            final_node_scores = [x[2] for x in dedup]
+            final_nodes, final_node_scores = _combine_ranked_items(node_lists, node_score_lists)
         end
         k = min(config.limit, length(final_nodes))
         final_nodes = final_nodes[1:k]
@@ -219,6 +229,8 @@ function search(
             final_nodes = final_nodes[order]
             final_node_scores = ce_scores[order]
         end
+    elseif reranker == CROSS_ENCODER
+        @warn "SearchConfig.reranker=CROSS_ENCODER requires config.cross_encoder; keeping pre-reranked order."
     end
 
     return SearchResults(
